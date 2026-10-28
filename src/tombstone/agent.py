@@ -15,12 +15,16 @@ from .trace import Trace
 
 @dataclass
 class RunResult:
-    answer: str | None
+    answers: list[str | None]  # one per phase; None for phases not reached
     turns: int
     stopped: str  # "answer" | "max_turns"
     history: list[Message]
     usage: list[Usage] = field(default_factory=list)
     prefix: list[PrefixReuse] = field(default_factory=list)
+
+    @property
+    def answer(self) -> str | None:
+        return self.answers[-1]
 
     @property
     def prompt_tokens(self) -> int:
@@ -73,16 +77,19 @@ class Agent:
         self._block_counter += 1
         return f"b{self._block_counter}"
 
-    def run(self, task: str) -> RunResult:
+    def run(self, phases: str | list[str]) -> RunResult:
+        """Run one or more phases. Each phase is a user message sent after the previous answer."""
+        phases = [phases] if isinstance(phases, str) else phases
         history = [
             Message(role="system", content=self.system_prompt),
-            Message(role="user", content=task),
+            Message(role="user", content=phases[0]),
         ]
+        answers: list[str | None] = []
         usages: list[Usage] = []
         prefixes: list[PrefixReuse] = []
         tracker = PrefixTracker(self.tokenizer)
         schemas = self.tools.schemas()
-        self.trace.log("start", task=task, strategy=self.strategy.name)
+        self.trace.log("start", phases=phases, strategy=self.strategy.name)
 
         for turn in range(1, self.max_turns + 1):
             context_tokens = self.tokenizer.count(serialize_request(history, schemas))
@@ -104,8 +111,13 @@ class Agent:
             )
 
             if not reply.tool_calls:
-                self.trace.log("end", stopped="answer", turns=turn)
-                return RunResult(reply.content, turn, "answer", history, usages, prefixes)
+                answers.append(reply.content)
+                if len(answers) == len(phases):
+                    self.trace.log("end", stopped="answer", turns=turn)
+                    return RunResult(answers, turn, "answer", history, usages, prefixes)
+                self.trace.log("phase", phase=len(answers), turn=turn)
+                history.append(Message(role="user", content=phases[len(answers)]))
+                continue
 
             for call in reply.tool_calls:
                 content, is_error = self.tools.dispatch(call.name, call.arguments, call.raw_arguments)
@@ -119,10 +131,14 @@ class Agent:
                         meta={"tool": call.name, "arguments": call.arguments, "is_error": is_error},
                     )
                 )
-                self.trace.log("tool_result", block_id=block_id, tool=call.name, is_error=is_error, chars=len(content))
+                self.trace.log(
+                    "tool_result", block_id=block_id, tool=call.name, arguments=call.arguments,
+                    is_error=is_error, chars=len(content),
+                )
 
             self.strategy.after_turn(history, turn)
             validate_tool_pairing(history)
 
         self.trace.log("end", stopped="max_turns", turns=self.max_turns)
-        return RunResult(None, self.max_turns, "max_turns", history, usages, prefixes)
+        answers += [None] * (len(phases) - len(answers))
+        return RunResult(answers, self.max_turns, "max_turns", history, usages, prefixes)

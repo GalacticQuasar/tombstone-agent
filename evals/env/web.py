@@ -1,10 +1,18 @@
-"""Mock web over a fixed local corpus. Deterministic; every page carries a relevance label."""
+"""Mock web over a fixed local corpus. Deterministic; relevance labels live on the Task."""
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from tombstone.tools import Tool, ToolError, object_schema
+
+
+_STOPWORDS = frozenset("a an and at by for from in is of on or the to was what when where which who with".split())
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in re.findall(r"\w+", text.lower()) if w not in _STOPWORDS}
 
 
 @dataclass
@@ -12,7 +20,6 @@ class Page:
     url: str
     title: str
     text: str
-    relevant: bool  # ground-truth label: is this page needed to solve the task?
     keywords: tuple[str, ...] = ()
 
 
@@ -21,10 +28,10 @@ class MockWeb:
         self.pages = {p.url: p for p in pages}
 
     def search(self, query: str) -> str:
-        terms = {t.lower() for t in query.split()}
+        terms = _words(query)
         scored = []
         for p in self.pages.values():
-            haystack = {w.lower() for w in (*p.keywords, *p.title.split())}
+            haystack = _words(" ".join((*p.keywords, p.title)))
             score = len(terms & haystack)
             if score:
                 scored.append((score, p))

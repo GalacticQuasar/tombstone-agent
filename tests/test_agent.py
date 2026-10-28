@@ -37,10 +37,10 @@ def test_toy_task_end_to_end_with_scripted_client():
         Message("assistant", content="1884, Ottilie Brandt"),
     ])
     agent = Agent(client, ToolRegistry(task.make_tools()), "sys")
-    result = agent.run(task.prompt)
+    result = agent.run(task.prompts)
 
     assert result.stopped == "answer"
-    assert task.grade(result.answer)
+    assert all(task.grade(result.answers))
     tool_msgs = [m for m in result.history if m.role == "tool"]
     assert [m.block_id for m in tool_msgs] == ["b1", "b2"]
     assert "completed in 1884" in tool_msgs[1].content

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from evals.env.web import MockWeb, Page
 
-from .base import Task, filler, regex_grader
+from .base import Phase, SourceLabel, Task, filler, regex_grader
 
 KW = ("velmora", "bridge", "history", "completed")
+RELEVANT_URL = "https://archive.example/velmora-bridge-history"
 
 
 def _pages() -> list[Page]:
@@ -17,17 +18,16 @@ def _pages() -> list[Page]:
         ("https://forum.example/t/velmora-bridge-myths", "Velmora bridge myths thread", "Some claim the bridge was finished in 1871, but sources disagree."),
     ]
     pages = [
-        Page(url, title, f"{lead} {filler(i, 900)}", relevant=False, keywords=KW)
+        Page(url, title, f"{lead} {filler(i, 900)}", keywords=KW)
         for i, (url, title, lead) in enumerate(distractors)
     ]
     pages.append(
         Page(
-            "https://archive.example/velmora-bridge-history",
+            RELEVANT_URL,
             "History of the Velmora Bridge",
             f"{filler(99, 300)} Construction began in 1879 under engineer Ottilie Brandt. "
             f"After two flood seasons, the Velmora Bridge was completed in 1884 and opened to tolls. "
             f"{filler(100, 300)}",
-            relevant=True,
             keywords=KW,
         )
     )
@@ -35,14 +35,19 @@ def _pages() -> list[Page]:
 
 
 def toy_bridge() -> Task:
+    pages = _pages()
     return Task(
         id="toy_bridge",
-        prompt=(
-            "In what year was the Velmora Bridge completed, and who was its engineer? "
-            "Use the web tools and verify against a primary source. "
-            "Reply with a final answer in the form: YEAR, ENGINEER."
-        ),
+        phases=[
+            Phase(
+                "In what year was the Velmora Bridge completed, and who was its engineer? "
+                "Use the web tools and verify against a primary source. "
+                "Reply with a final answer in the form: YEAR, ENGINEER.",
+                regex_grader(r"1884.*Brandt|Brandt.*1884"),
+            )
+        ],
         make_tools=lambda: MockWeb(_pages()).tools(),
-        grade=regex_grader(r"1884.*Brandt|Brandt.*1884"),
-        relevant_sources={("web_fetch", "https://archive.example/velmora-bridge-history")},
+        labels={
+            ("web_fetch", p.url): SourceLabel("relevant" if p.url == RELEVANT_URL else "distractor", 0) for p in pages
+        },
     )

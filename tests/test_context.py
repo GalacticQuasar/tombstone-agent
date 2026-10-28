@@ -148,9 +148,9 @@ def test_self_forget_end_to_end(tmp_path):
     trace = Trace(None)
     strategy = SelfForget(apply_threshold=0)
     agent = Agent(client, ToolRegistry(task.make_tools()), "sys", strategy=strategy, trace=trace, run_dir=tmp_path)
-    result = agent.run(task.prompt)
+    result = agent.run(task.prompts)
 
-    assert result.stopped == "answer" and task.grade(result.answer)
+    assert result.stopped == "answer" and all(task.grade(result.answers))
     assert "## Context management" in result.history[0].content
     tools = {m.block_id: m for m in result.history if m.role == "tool"}
     assert tools["b1"].content.startswith("[b1 forgotten: web_fetch(url=https://wiki.example/Velmora_River)")

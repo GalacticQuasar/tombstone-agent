@@ -1,4 +1,4 @@
-"""In-memory fake filesystem with per-file relevance labels."""
+"""In-memory fake filesystem. Relevance labels live on the Task."""
 
 from __future__ import annotations
 
@@ -6,9 +6,8 @@ from tombstone.tools import Tool, ToolError, object_schema
 
 
 class FakeFS:
-    def __init__(self, files: dict[str, str], relevant: set[str] | None = None):
+    def __init__(self, files: dict[str, str]):
         self.files = dict(files)
-        self.relevant = relevant or set()
 
     def list_dir(self, path: str = "/") -> str:
         prefix = path.rstrip("/") + "/"
