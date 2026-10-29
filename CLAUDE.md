@@ -52,6 +52,8 @@ report to `results/<name>_report.txt` so the numbers are committed (`results/` h
 
 ## Status
 Done: core loop, forgetting, baselines, task suite, full Qwen matrix (see PLAN.md).
+Prior work: the mechanism is already published (PLAN.md "Related work"); frame results as the controlled
+study plus cost-aware apply, not as a new mechanism.
 Open, in rough priority: cost-aware apply rule (confirm before starting),
 longer horizons, harder tasks that separate accuracy, Llama second-family run, ablations
 (immediate vs batched apply, ledger on/off, summary vs bare stub).

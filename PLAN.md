@@ -1,9 +1,27 @@
 # Tombstone Agent: Plan
 
 ## Context
-`IDEA.md` describes an agent that can **forget** parts of its own context. Context is split into addressable blocks. The agent can replace a block with a tombstone and recover it later from an archive. The research question is whether self-directed forgetting cuts token cost while keeping task success, compared with no management and with naive truncation/compaction. This differs from existing auto context-editing (e.g. Anthropic's `clear_tool_uses`) in two ways: the **agent** decides what to drop, and forgotten content can be **retrieved**. Mention that in the write-up even though it isn't a baseline.
+`IDEA.md` describes an agent that can **forget** parts of its own context. Context is split into addressable blocks. The agent can replace a block with a tombstone and recover it later from an archive. The research question is whether self-directed forgetting cuts token cost while keeping task success, compared with no management and with naive truncation/compaction. The mechanism itself has since been published (see **Related work**), so the contribution has to come from the controlled study and the cost-aware apply rule, not from the mechanism.
 
 Greenfield repo (only `IDEA.md`). The deliverable is a research prototype plus experimental results.
+
+## Related work (searched 2026-10-29)
+The mechanism is **not novel**. Closest prior work:
+
+| Work | What it does | Gap relative to us |
+|---|---|---|
+| Franke, *Agent-Controlled Forgetting for Tool-Using Agents* ([2610.10590](https://arxiv.org/abs/2610.10590), 6 Oct 2026) | Nearly identical: tool results only, agent-written note in place, archive, batch `context_apply`, `context_recover` as a new tool result, ephemeral reminder. Also used glm-5.3-flash. 50% fewer input tokens on one task, slightly more on another, worse on an adverse case (4/12 vs 6/12) | One run pair per task, no variance, one model; recovery not exercised in the main pair; only a keep-everything baseline; cache costed as a range. Their future work (repeated runs, a recovery-demand task, matched clearing/compaction baselines) is what our suite does |
+| VISTA ([2606.30005](https://arxiv.org/abs/2606.30005), Jun 2026) | Every message is an addressable block; a per-turn dashboard (≈ our ledger); archive (recoverable) or delete. LOCA-Bench 22.7% → 50.7%; removing the dashboard costs more than removing recovery | Ignores prompt caching; costs are raw token counts |
+| Cache Engineering for Agents ([2610.28577](https://arxiv.org/abs/2610.28577), Oct 2026) | Agent drops entries from the KV cache instead of editing text, so nothing is re-prefilled. −27.7% cost vs threshold summarization | Needs serving-side cache control, not just an API |
+| Beyond Compaction ([2606.11213](https://arxiv.org/abs/2606.11213)), Beyond Token Savings ([2609.32961](https://arxiv.org/abs/2609.32961)), TokenPilot ([2606.17016](https://arxiv.org/abs/2606.17016)), CliffCompaction ([2609.26779](https://arxiv.org/abs/2609.26779)) | Rewriting history invalidates the cached suffix, so token savings ≠ cost savings; designs that keep the prefix stable or compact rarely | Our "caching eats the savings" finding is already known. *Only seen via search snippets; read before citing* |
+| MemGPT ([2310.08560](https://arxiv.org/abs/2310.08560)), Anthropic `clear_tool_uses`, ACON ([2510.00615](https://arxiv.org/abs/2510.00615)) | Agent pages memory via function calls; automatic oldest-first tool-result clearing; optimized compression guidelines | Ancestors / automatic baselines |
+
+**What may still be ours:**
+1. A controlled, labelled study: matched truncate/compact baselines, seeds, trap phases, ideal prefix-reuse cost. Needs more seeds and a second model to be convincing.
+2. Forget precision against ground-truth source labels. Not seen in the papers above.
+3. A **cost-aware apply rule** deciding *when* agent-chosen forgets take effect (break-even: saved × cache price × remaining turns > invalidated suffix × (input − cache price)). The cache papers instead keep the prefix stable or edit the KV cache. Check *Beyond Token Savings* in full before claiming this.
+
+**Baselines to add:** threshold clearing as in Franke's comparison plan, and possibly a VISTA-style archive. Cache-engineering drop needs a local serving stack (vLLM/SGLang), so treat it as discussion unless we self-host.
 
 ## Decisions (from the grilling)
 | Topic | Decision |
