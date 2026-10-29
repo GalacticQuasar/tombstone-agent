@@ -2,16 +2,18 @@
 
 Hooks per turn: `on_request` (before the model call; may return ephemeral text that is
 sent but never stored) and `after_turn` (after tool results are appended; may rewrite
-history in place). Truncate and AutoCompact arrive in phase 3.
+history in place). Baselines: NoOp (full context), Truncate (stub old tool results),
+AutoCompact (summarize the transcript at a threshold).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from .context import ContextStore
+from .client import ChatClient
+from .context import ContextStore, describe_source, fmt_tokens
 from .messages import Message
-from .prefix import ApproxTokenizer, Tokenizer
+from .prefix import ApproxTokenizer, Tokenizer, serialize_request
 from .tools import Tool, object_schema
 from .trace import Trace
 
@@ -19,9 +21,10 @@ from .trace import Trace
 class Strategy:
     name = "base"
 
-    def bind(self, trace: Trace, run_dir: Path | None) -> None:
+    def bind(self, trace: Trace, run_dir: Path | None, client: ChatClient) -> None:
         self.trace = trace
         self.run_dir = run_dir
+        self.client = client
 
     def system_prompt_addendum(self) -> str:
         return ""
@@ -70,8 +73,8 @@ class SelfForget(Strategy):
         self.store = ContextStore(tokenizer or ApproxTokenizer(), apply_threshold, min_block_tokens)
         self.show_ledger = show_ledger
 
-    def bind(self, trace: Trace, run_dir: Path | None) -> None:
-        super().bind(trace, run_dir)
+    def bind(self, trace: Trace, run_dir: Path | None, client: ChatClient) -> None:
+        super().bind(trace, run_dir, client)
         self.store.archive_dir = run_dir / "archive" if run_dir else None
 
     def system_prompt_addendum(self) -> str:
@@ -118,7 +121,105 @@ class SelfForget(Strategy):
             self.trace.log("forget_applied", turn=turn, block_ids=applied, tokens_saved=savings)
 
 
+def context_tokens(history: list[Message], tokenizer: Tokenizer) -> int:
+    return tokenizer.count(serialize_request(history, []))
+
+
+class Truncate(Strategy):
+    """Naive baseline: once context exceeds `trigger_tokens`, stub all but the last `keep_last`
+    tool results. Stubs carry no summary and can't be retrieved (the agent can re-run the tool)."""
+
+    name = "truncate"
+
+    def __init__(self, keep_last: int = 5, trigger_tokens: int = 20_000, tokenizer: Tokenizer | None = None):
+        self.keep_last = keep_last
+        self.trigger_tokens = trigger_tokens
+        self.tokenizer = tokenizer or ApproxTokenizer()
+
+    def after_turn(self, history: list[Message], turn: int) -> None:
+        if context_tokens(history, self.tokenizer) < self.trigger_tokens:
+            return
+        results = [m for m in history if m.role == "tool"]
+        cut = results[: max(len(results) - self.keep_last, 0)]
+        cleared, saved = [], 0
+        for m in cut:
+            if m.meta.get("cleared"):
+                continue
+            stub = (
+                f"[{m.block_id} cleared: {describe_source(m.meta.get('tool', '?'), m.meta.get('arguments', {}))}, "
+                f"{fmt_tokens(self.tokenizer.count(m.content or ''))} tok]"
+            )
+            saved += self.tokenizer.count(m.content or "") - self.tokenizer.count(stub)
+            m.content = stub
+            m.meta["cleared"] = True
+            cleared.append(m.block_id)
+        if cleared:
+            self.trace.log("truncate_applied", turn=turn, block_ids=cleared, tokens_saved=saved)
+
+
+COMPACT_PROMPT = """\
+You are compacting the transcript of an AI agent's work so it can continue with a much \
+shorter context. Write a summary the agent can rely on instead of the transcript:
+- Each earlier question it was asked and the final answer it gave.
+- Key facts found so far, with exact numbers, names, identifiers and their sources (URLs/paths).
+- Which sources were checked and turned out irrelevant or misleading, and why.
+- For the current question: what has been established and what still needs to be done.
+Be concise but do not drop specific facts that might be needed later."""
+
+
+def transcript_text(history: list[Message]) -> str:
+    """Plain-text transcript for the summarizer (system prompt omitted)."""
+    lines = []
+    for m in history:
+        if m.role == "system":
+            continue
+        if m.role == "tool":
+            src = describe_source(m.meta.get("tool", "?"), m.meta.get("arguments", {}), limit=200)
+            lines.append(f"[tool result {m.block_id}: {src}]\n{m.content}")
+        elif m.role == "assistant":
+            calls = "; ".join(describe_source(c.name, c.arguments, limit=200) for c in m.tool_calls)
+            lines.append(f"[assistant]\n{m.content or ''}" + (f"\n(tool calls: {calls})" if calls else ""))
+        else:
+            lines.append(f"[user]\n{m.content}")
+    return "\n\n".join(lines)
+
+
+class AutoCompact(Strategy):
+    """Baseline: once context exceeds `threshold_tokens`, have the model summarize the whole
+    transcript and restart from [system, summary + current question]."""
+
+    name = "compact"
+
+    def __init__(self, threshold_tokens: int = 20_000, tokenizer: Tokenizer | None = None):
+        self.threshold_tokens = threshold_tokens
+        self.tokenizer = tokenizer or ApproxTokenizer()
+
+    def after_turn(self, history: list[Message], turn: int) -> None:
+        before = context_tokens(history, self.tokenizer)
+        if before < self.threshold_tokens:
+            return
+        phase_msg = next(m for m in reversed(history) if "phase" in m.meta)
+        question = phase_msg.meta.get("question", phase_msg.content)
+        completion = self.client.complete(
+            [Message("system", COMPACT_PROMPT), Message("user", transcript_text(history))], []
+        )
+        summary = (completion.message.content or "").strip()
+        history[1:] = [
+            Message(
+                "user",
+                f"<summary of earlier work>\n{summary}\n</summary>\n\nContinue with the current question:\n{question}",
+                meta={"phase": phase_msg.meta["phase"], "question": question, "compacted": True},
+            )
+        ]
+        self.trace.log(
+            "compact_applied", turn=turn, tokens_before=before,
+            tokens_after=context_tokens(history, self.tokenizer), usage=completion.usage, summary=summary,
+        )
+
+
 STRATEGIES: dict[str, type[Strategy]] = {
     NoOp.name: NoOp,
     SelfForget.name: SelfForget,
+    Truncate.name: Truncate,
+    AutoCompact.name: AutoCompact,
 }

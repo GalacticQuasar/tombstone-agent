@@ -63,7 +63,7 @@ class Agent:
         self.client = client
         self.trace = trace or Trace(None)
         self.strategy = strategy or NoOp()
-        self.strategy.bind(self.trace, run_dir)
+        self.strategy.bind(self.trace, run_dir, client)
         self.tools = tools
         for t in self.strategy.tools():
             self.tools.add(t)
@@ -82,7 +82,7 @@ class Agent:
         phases = [phases] if isinstance(phases, str) else phases
         history = [
             Message(role="system", content=self.system_prompt),
-            Message(role="user", content=phases[0]),
+            Message(role="user", content=phases[0], meta={"phase": 0}),
         ]
         answers: list[str | None] = []
         usages: list[Usage] = []
@@ -116,7 +116,7 @@ class Agent:
                     self.trace.log("end", stopped="answer", turns=turn)
                     return RunResult(answers, turn, "answer", history, usages, prefixes)
                 self.trace.log("phase", phase=len(answers), turn=turn)
-                history.append(Message(role="user", content=phases[len(answers)]))
+                history.append(Message(role="user", content=phases[len(answers)], meta={"phase": len(answers)}))
                 continue
 
             for call in reply.tool_calls:

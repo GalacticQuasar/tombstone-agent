@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 from tombstone.agent import Agent
 from tombstone.client import BACKENDS, OpenAIChatClient
-from tombstone.strategies import STRATEGIES, SelfForget, Strategy
+from tombstone.strategies import STRATEGIES, AutoCompact, SelfForget, Strategy, Truncate
 from tombstone.tools import ToolRegistry
 from tombstone.trace import Trace
 
@@ -30,6 +30,10 @@ SYSTEM_PROMPT = (
 def make_strategy(args: argparse.Namespace) -> Strategy:
     if args.strategy == SelfForget.name:
         return SelfForget(apply_threshold=args.apply_threshold, show_ledger=not args.no_ledger)
+    if args.strategy == Truncate.name:
+        return Truncate(keep_last=args.keep_last, trigger_tokens=args.trigger)
+    if args.strategy == AutoCompact.name:
+        return AutoCompact(threshold_tokens=args.trigger)
     return STRATEGIES[args.strategy]()
 
 
@@ -44,6 +48,8 @@ def main() -> None:
     ap.add_argument("--runs-dir", type=Path, default=Path("runs"))
     ap.add_argument("--apply-threshold", type=int, default=10_000, help="self_forget: batch-apply threshold (tokens)")
     ap.add_argument("--no-ledger", action="store_true", help="self_forget: hide the per-turn block ledger")
+    ap.add_argument("--keep-last", type=int, default=5, help="truncate: tool results kept intact")
+    ap.add_argument("--trigger", type=int, default=20_000, help="truncate/compact: context size (tokens) that triggers")
     args = ap.parse_args()
 
     task = TASKS[args.task]
@@ -66,6 +72,7 @@ def main() -> None:
         trace.close()
 
     phase_ok = task.grade(result.answers)
+    compactions = [e for e in trace.events if e["event"] == "compact_applied"]
     summary = {
         "run_id": run_id,
         "task": task.id,
@@ -82,6 +89,11 @@ def main() -> None:
         "forgets_requested": sum(e["event"] == "forget_requested" for e in trace.events),
         "forgets_applied": sum(len(e["block_ids"]) for e in trace.events if e["event"] == "forget_applied"),
         "retrievals": sum(e["event"] == "retrieve" for e in trace.events),
+        "truncations": sum(e["event"] == "truncate_applied" for e in trace.events),
+        "compactions": len(compactions),
+        # Summarizer calls made by the compact strategy; part of its cost.
+        "aux_prompt_tokens": sum(e["usage"]["prompt"] for e in compactions),
+        "aux_completion_tokens": sum(e["usage"]["completion"] for e in compactions),
         "forgets_by_label": forget_breakdown(trace.events, task),
         "reads_by_label": reads_breakdown(trace.events, task),
         "answers": result.answers,

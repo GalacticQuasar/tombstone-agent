@@ -26,10 +26,11 @@ class Trace:
             self._fh = None
 
     def log(self, event: str, **data: Any) -> None:
-        rec = {"t": time.time(), "event": event, **data}
-        self.events.append(rec)
+        line = json.dumps({"t": time.time(), "event": event, **data}, default=_default)
+        # Keep the in-memory copy identical to the file (plain JSON types, no dataclasses).
+        self.events.append(json.loads(line))
         if self._fh is not None:
-            self._fh.write(json.dumps(rec, default=_default) + "\n")
+            self._fh.write(line + "\n")
             self._fh.flush()
 
     def close(self) -> None:
