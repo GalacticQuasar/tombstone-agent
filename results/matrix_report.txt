@@ -1,0 +1,26 @@
+task        backend          strategy      n phases ok turns   prompt   peak reread  $m none  $m real  $m ideal  notes
+----------------------------------------------------------------------------------------------------------------------
+chain_1     or-qwen3.8-27b   none          3       6/6  18.0   355.7k  44.1k    0.0    58.31    30.44     23.05  
+chain_1     or-qwen3.8-27b   self_forget   3       6/6  19.3   225.5k  20.4k    0.0    42.56    33.79     23.55  forgot=19.3333
+chain_1     or-qwen3.8-27b   truncate      3       6/6  25.7   300.1k  18.5k   10.7    53.28    36.46     28.03  truncations=4.66667
+chain_1     or-qwen3.8-27b   compact       3       5/6  22.0   231.6k  17.9k    5.3    57.88    45.30     42.10  compactions=2
+chain_2     or-qwen3.8-27b   none          3       6/6  14.3   277.0k  42.8k    0.3    46.31    23.79     19.84  
+chain_2     or-qwen3.8-27b   self_forget   3       6/6  20.0   231.5k  24.1k    0.3    44.35    28.62     24.09  forgot=20
+chain_2     or-qwen3.8-27b   truncate      3       6/6  15.7   175.8k  18.9k    0.0    30.94    17.56     16.25  truncations=2
+chain_2     or-qwen3.8-27b   compact       3       6/6  23.7   253.0k  19.1k   11.3    48.82    33.95     31.29  compactions=2
+dossier_1   or-qwen3.8-27b   none          3     15/15  15.3   320.8k  43.5k    0.3    59.47    41.86     27.96  
+dossier_1   or-qwen3.8-27b   self_forget   3     15/15  19.0   259.2k  28.0k    1.3    58.90    47.64     36.19  forgot=24 retrieved=0.333333
+dossier_1   or-qwen3.8-27b   truncate      3     15/15  21.7   245.1k  15.3k    8.0    54.46    46.02     32.40  truncations=4
+dossier_1   or-qwen3.8-27b   compact       3     15/15  21.7   246.6k  18.6k   13.7    64.97    55.35     48.60  compactions=2.33333
+dossier_2   or-qwen3.8-27b   none          3     15/15  20.0   492.2k  50.4k    3.7    93.10    58.29     42.74  
+dossier_2   or-qwen3.8-27b   self_forget   3     15/15  20.7   296.3k  30.0k    0.7    68.26    53.30     41.51  forgot=24 retrieved=0.333333
+dossier_2   or-qwen3.8-27b   truncate      3     13/15  23.7   284.5k  19.0k    7.7    69.74    56.66     44.29  truncations=4
+dossier_2   or-qwen3.8-27b   compact       3     15/15  25.7   270.7k  17.1k   19.7    70.03    57.77     53.36  compactions=3
+repo_1      or-qwen3.8-27b   none          3     12/12  11.3   135.8k  24.3k    0.7    26.48    18.19     13.84  
+repo_1      or-qwen3.8-27b   self_forget   3     12/12  13.7   107.2k  15.3k    0.0    24.40    17.84     15.43  forgot=10 retrieved=1
+repo_1      or-qwen3.8-27b   truncate      3     12/12  13.7   111.5k  15.4k    3.7    22.99    16.02     13.45  truncations=1
+repo_1      or-qwen3.8-27b   compact       3     12/12  16.0   129.9k  16.0k    7.3    27.91    23.85     18.57  compactions=1
+repo_2      or-qwen3.8-27b   none          3     12/12  11.3   142.9k  25.4k    0.0    26.26    19.53     12.93  
+repo_2      or-qwen3.8-27b   self_forget   3     12/12  15.0   159.4k  22.1k    0.0    35.47    31.91     21.21  forgot=6 retrieved=1.33333
+repo_2      or-qwen3.8-27b   truncate      3     11/12  16.0   155.2k  17.5k   12.3    35.29    29.74     21.93  truncations=1.66667
+repo_2      or-qwen3.8-27b   compact       3     12/12  21.0   196.7k  16.4k   20.0    47.85    41.59     34.49  compactions=1.66667

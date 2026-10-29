@@ -1,0 +1,14 @@
+task        backend          strategy      n phases ok turns   prompt   peak reread  $m none  $m real  $m ideal  notes
+----------------------------------------------------------------------------------------------------------------------
+chain_1     or-qwen3.8-27b   none          1       2/2  15.0   225.6k  34.5k    0.0    38.30    17.49     19.26  
+chain_1     or-qwen3.8-27b   self_forget   1       2/2  17.0   199.5k  23.2k    0.0    38.91    28.68     24.99  forgot=28
+chain_1     or-qwen3.8-27b   truncate      1       2/2  23.0   270.2k  20.2k    0.0    46.07    27.11     23.81  truncations=2
+chain_1     or-qwen3.8-27b   compact       1       2/2  26.0   300.0k  20.4k    7.0    72.42    58.31     53.05  compactions=2
+dossier_1   or-qwen3.8-27b   none          1       5/5  15.0   339.0k  44.5k    1.0    61.37    31.03     31.72  
+dossier_1   or-qwen3.8-27b   self_forget   1       5/5  16.0   249.1k  28.1k    0.0    54.29    40.18     34.43  forgot=12 retrieved=1
+dossier_1   or-qwen3.8-27b   truncate      1       5/5  21.0   259.4k  22.2k   11.0    57.19    44.66     37.80  truncations=4
+dossier_1   or-qwen3.8-27b   compact       1       5/5  22.0   261.9k  22.1k   15.0    67.04    55.40     52.03  compactions=2
+repo_1      or-qwen3.8-27b   none          1       4/4  11.0   107.5k  21.1k    0.0    21.81    13.25     12.61  
+repo_1      or-qwen3.8-27b   self_forget   1       4/4  15.0   126.1k  22.1k    0.0    27.94    18.33     17.54  forgot=15 retrieved=1
+repo_1      or-qwen3.8-27b   truncate      1       4/4  11.0   106.9k  21.0k    0.0    22.35    17.76     13.19  
+repo_1      or-qwen3.8-27b   compact       1       4/4  17.0   163.2k  19.0k    9.0    40.66    34.31     29.46  compactions=1

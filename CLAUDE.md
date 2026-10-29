@@ -16,7 +16,9 @@ uv run python -m evals.run --task toy_bridge --strategy self_forget --backend or
 evals/matrix.sh runs/<name> or-qwen3.8-27b 0.7     # 6 tasks × 4 strategies × 3 seeds, JOBS=8 parallel (~$2.60)
 uv run python -m evals.report runs/<name>          # per task/strategy table, $ under none/real/ideal cache
 ```
-Each run writes `runs/<dir>/<run-id>/{trace.jsonl,summary.json,archive/}`. `runs/` is git-ignored.
+Each run writes `runs/<dir>/<run-id>/{trace.jsonl,summary.json,archive/}`. `runs/` is git-ignored;
+after an experiment, `uv run python -m evals.export runs/<name> results/<name>.jsonl` and save the
+report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix and pilot).
 
 ## Layout
 - `src/tombstone/`: `messages.py` (canonical types → OpenAI format), `client.py` (backend

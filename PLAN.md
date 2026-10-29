@@ -116,6 +116,7 @@ Pilot, Qwen 3.8 27B, 1 seed. All 4 strategies got 100% of phases on all 3 tasks.
 - The matrix runs at temperature 0.7 (`--temperature`). At temperature 0, seeds mostly repeat the same run.
 
 ## Full matrix (2026-10-28) — `runs/matrix`, $2.60 total
+Per-run data: `results/matrix.jsonl` (summary + trace-derived cost per run); table: `results/matrix_report.txt`.
 Qwen 3.8 27B, temperature 0.7, 6 task variants × 4 strategies × 3 seeds = 72 runs, all completed. Thresholds use exact Qwen token counts.
 
 | strategy | phase acc (of 66) | $ no cache | $ real cache | $ ideal cache | peak prompt | re-reads |
