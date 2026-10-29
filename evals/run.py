@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 
 from tombstone.agent import Agent
 from tombstone.client import BACKENDS, OpenAIChatClient
+from tombstone.prefix import ApproxTokenizer, HFTokenizer
 from tombstone.strategies import STRATEGIES, AutoCompact, SelfForget, Strategy, Truncate
 from tombstone.tools import ToolRegistry
 from tombstone.trace import Trace
@@ -44,6 +45,7 @@ def main() -> None:
     ap.add_argument("--strategy", default="none", choices=sorted(STRATEGIES))
     ap.add_argument("--backend", default="ollama-glm-flash", choices=sorted(BACKENDS))
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--temperature", type=float, default=0.0)
     ap.add_argument("--max-turns", type=int, default=80)
     ap.add_argument("--runs-dir", type=Path, default=Path("runs"))
     ap.add_argument("--apply-threshold", type=int, default=10_000, help="self_forget: batch-apply threshold (tokens)")
@@ -53,18 +55,20 @@ def main() -> None:
     args = ap.parse_args()
 
     task = TASKS[args.task]
+    backend = BACKENDS[args.backend]
     run_id = f"{time.strftime('%Y%m%d-%H%M%S')}_{task.id}_{args.strategy}_{args.backend}_s{args.seed}"
     run_dir = args.runs_dir / run_id
     trace = Trace(run_dir / "trace.jsonl")
 
     agent = Agent(
-        client=OpenAIChatClient(BACKENDS[args.backend], seed=args.seed),
+        client=OpenAIChatClient(backend, temperature=args.temperature, seed=args.seed),
         tools=ToolRegistry(task.make_tools()),
         system_prompt=SYSTEM_PROMPT,
         strategy=make_strategy(args),
         trace=trace,
         max_turns=args.max_turns,
         run_dir=run_dir,
+        tokenizer=HFTokenizer(backend.tokenizer) if backend.tokenizer else ApproxTokenizer(),
     )
     try:
         result = agent.run(task.prompts)
@@ -79,6 +83,7 @@ def main() -> None:
         "strategy": args.strategy,
         "backend": args.backend,
         "seed": args.seed,
+        "temperature": args.temperature,
         "success": all(phase_ok),
         "phase_success": phase_ok,
         "stopped": result.stopped,

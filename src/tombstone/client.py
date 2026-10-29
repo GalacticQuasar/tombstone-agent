@@ -20,6 +20,8 @@ class Backend:
     api_key_env: str | None = None
     # Extra request body fields (e.g. OpenRouter provider pinning).
     extra_body: dict[str, Any] | None = None
+    # Hugging Face repo whose tokenizer matches the model; None → approximate counts.
+    tokenizer: str | None = None
 
 
 BACKENDS: dict[str, Backend] = {
@@ -31,7 +33,7 @@ BACKENDS: dict[str, Backend] = {
 }
 
 
-def _openrouter(name: str, model: str, provider: str) -> Backend:
+def _openrouter(name: str, model: str, provider: str, tokenizer: str | None = None) -> Backend:
     """OpenRouter backend pinned to one provider endpoint, so runs stay reproducible."""
     return Backend(
         name,
@@ -39,6 +41,7 @@ def _openrouter(name: str, model: str, provider: str) -> Backend:
         model,
         api_key_env="OPENROUTER_API_KEY",
         extra_body={"provider": {"order": [provider], "allow_fallbacks": False}},
+        tokenizer=tokenizer,
     )
 
 
@@ -46,7 +49,8 @@ BACKENDS.update({
     b.name: b
     for b in [
         # Both report real prefix-cache hits.
-        _openrouter("or-qwen3.8-27b", "qwen/qwen3.8-27b", "deepinfra/bf16"),
+        _openrouter("or-qwen3.8-27b", "qwen/qwen3.8-27b", "deepinfra/bf16", tokenizer="Qwen/Qwen3.8-27B"),
+        # The Llama tokenizer repo is gated on Hugging Face; approximate counts until a token is set up.
         _openrouter("or-llama3.3-70b", "meta-llama/llama-3.3-70b-instruct", "akashml/fp8"),
     ]
 })

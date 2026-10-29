@@ -7,14 +7,15 @@ from tests.test_agent import ScriptedClient, call
 from tests.test_context import BIG, history_with
 from tombstone.agent import Agent
 from tombstone.messages import Message, validate_tool_pairing
-from tombstone.prefix import ApproxTokenizer
+from tombstone.prefix import ApproxTokenizer, serialize_request
 from tombstone.strategies import AutoCompact, Truncate, transcript_text
 from tombstone.tools import ToolRegistry
 from tombstone.trace import Trace
 
 
 def bound(strategy, client=None):
-    strategy.bind(Trace(None), None, client)
+    tok = ApproxTokenizer()
+    strategy.bind(Trace(None), None, client, tok, lambda h: tok.count(serialize_request(h, [])))
     return strategy
 
 

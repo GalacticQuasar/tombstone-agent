@@ -27,7 +27,7 @@ class ApproxTokenizer:
 
 
 class HFTokenizer:
-    """Exact counts from a Hugging Face tokenizer (`uv add tokenizers` to use)."""
+    """Exact counts from a Hugging Face tokenizer (downloaded once, then cached)."""
 
     def __init__(self, repo_id: str):
         from tokenizers import Tokenizer as _Tok
@@ -39,12 +39,23 @@ class HFTokenizer:
 
 
 def serialize_request(messages: list[Message], tools: list[dict[str, Any]]) -> str:
-    """Stable text form of a request. Tools come first, as chat templates usually place them."""
-    # Serialized separately: sort_keys on one dict would put "messages" before "tools".
+    """Stable text form of a request, laid out like a chat template.
+
+    Tools come first, as templates usually place them. Content is raw text, not JSON, so
+    newlines and quotes in pages aren't escaped (escaping inflated counts by ~10%).
+    """
     def dump(o: Any) -> str:
         return json.dumps(o, sort_keys=True, ensure_ascii=False)
 
-    return dump(tools) + "\n" + "\n".join(dump(m) for m in render(messages))
+    parts = [f"<|tools|>\n{dump(tools)}"]
+    for m in render(messages):
+        if m["role"] == "tool":
+            parts.append(f"<|tool {m['tool_call_id']}|>\n{m['content']}")
+            continue
+        parts.append(f"<|{m['role']}|>\n{m.get('content') or ''}")
+        for tc in m.get("tool_calls", []):
+            parts.append(f"<tool_call {tc['id']} {tc['function']['name']}>{tc['function']['arguments']}</tool_call>")
+    return "\n".join(parts)
 
 
 def common_prefix_len(a: str, b: str) -> int:

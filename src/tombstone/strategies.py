@@ -8,12 +8,13 @@ AutoCompact (summarize the transcript at a threshold).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from .client import ChatClient
 from .context import ContextStore, describe_source, fmt_tokens
 from .messages import Message
-from .prefix import ApproxTokenizer, Tokenizer, serialize_request
+from .prefix import Tokenizer
 from .tools import Tool, object_schema
 from .trace import Trace
 
@@ -21,10 +22,21 @@ from .trace import Trace
 class Strategy:
     name = "base"
 
-    def bind(self, trace: Trace, run_dir: Path | None, client: ChatClient) -> None:
+    def bind(
+        self,
+        trace: Trace,
+        run_dir: Path | None,
+        client: ChatClient,
+        tokenizer: Tokenizer,
+        count_context: Callable[[list[Message]], int],
+    ) -> None:
+        """`count_context` measures a history as the agent sends it (tool schemas included),
+        so every strategy's thresholds are in the same units as the real prompt."""
         self.trace = trace
         self.run_dir = run_dir
         self.client = client
+        self.tokenizer = tokenizer
+        self.count_context = count_context
 
     def system_prompt_addendum(self) -> str:
         return ""
@@ -67,14 +79,21 @@ class SelfForget(Strategy):
         self,
         apply_threshold: int = 10_000,
         min_block_tokens: int = 300,
-        tokenizer: Tokenizer | None = None,
         show_ledger: bool = True,
     ):
-        self.store = ContextStore(tokenizer or ApproxTokenizer(), apply_threshold, min_block_tokens)
+        self.store = ContextStore(apply_threshold=apply_threshold, min_block_tokens=min_block_tokens)
         self.show_ledger = show_ledger
 
-    def bind(self, trace: Trace, run_dir: Path | None, client: ChatClient) -> None:
-        super().bind(trace, run_dir, client)
+    def bind(
+        self,
+        trace: Trace,
+        run_dir: Path | None,
+        client: ChatClient,
+        tokenizer: Tokenizer,
+        count_context: Callable[[list[Message]], int],
+    ) -> None:
+        super().bind(trace, run_dir, client, tokenizer, count_context)
+        self.store.tokenizer = tokenizer
         self.store.archive_dir = run_dir / "archive" if run_dir else None
 
     def system_prompt_addendum(self) -> str:
@@ -121,23 +140,18 @@ class SelfForget(Strategy):
             self.trace.log("forget_applied", turn=turn, block_ids=applied, tokens_saved=savings)
 
 
-def context_tokens(history: list[Message], tokenizer: Tokenizer) -> int:
-    return tokenizer.count(serialize_request(history, []))
-
-
 class Truncate(Strategy):
     """Naive baseline: once context exceeds `trigger_tokens`, stub all but the last `keep_last`
     tool results. Stubs carry no summary and can't be retrieved (the agent can re-run the tool)."""
 
     name = "truncate"
 
-    def __init__(self, keep_last: int = 5, trigger_tokens: int = 20_000, tokenizer: Tokenizer | None = None):
+    def __init__(self, keep_last: int = 5, trigger_tokens: int = 20_000):
         self.keep_last = keep_last
         self.trigger_tokens = trigger_tokens
-        self.tokenizer = tokenizer or ApproxTokenizer()
 
     def after_turn(self, history: list[Message], turn: int) -> None:
-        if context_tokens(history, self.tokenizer) < self.trigger_tokens:
+        if self.count_context(history) < self.trigger_tokens:
             return
         results = [m for m in history if m.role == "tool"]
         cut = results[: max(len(results) - self.keep_last, 0)]
@@ -190,12 +204,11 @@ class AutoCompact(Strategy):
 
     name = "compact"
 
-    def __init__(self, threshold_tokens: int = 20_000, tokenizer: Tokenizer | None = None):
+    def __init__(self, threshold_tokens: int = 20_000):
         self.threshold_tokens = threshold_tokens
-        self.tokenizer = tokenizer or ApproxTokenizer()
 
     def after_turn(self, history: list[Message], turn: int) -> None:
-        before = context_tokens(history, self.tokenizer)
+        before = self.count_context(history)
         if before < self.threshold_tokens:
             return
         phase_msg = next(m for m in reversed(history) if "phase" in m.meta)
@@ -213,7 +226,7 @@ class AutoCompact(Strategy):
         ]
         self.trace.log(
             "compact_applied", turn=turn, tokens_before=before,
-            tokens_after=context_tokens(history, self.tokenizer), usage=completion.usage, summary=summary,
+            tokens_after=self.count_context(history), usage=completion.usage, summary=summary,
         )
 
 

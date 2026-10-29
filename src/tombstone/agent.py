@@ -63,15 +63,19 @@ class Agent:
         self.client = client
         self.trace = trace or Trace(None)
         self.strategy = strategy or NoOp()
-        self.strategy.bind(self.trace, run_dir, client)
         self.tools = tools
         for t in self.strategy.tools():
             self.tools.add(t)
+        self.schemas = self.tools.schemas()
+        self.tokenizer = tokenizer or ApproxTokenizer()
+        self.strategy.bind(self.trace, run_dir, client, self.tokenizer, self.count_context)
         addendum = self.strategy.system_prompt_addendum()
         self.system_prompt = f"{system_prompt}\n\n{addendum}" if addendum else system_prompt
         self.max_turns = max_turns
-        self.tokenizer = tokenizer or ApproxTokenizer()
         self._block_counter = 0
+
+    def count_context(self, history: list[Message]) -> int:
+        return self.tokenizer.count(serialize_request(history, self.schemas))
 
     def _next_block_id(self) -> str:
         self._block_counter += 1
@@ -88,11 +92,11 @@ class Agent:
         usages: list[Usage] = []
         prefixes: list[PrefixReuse] = []
         tracker = PrefixTracker(self.tokenizer)
-        schemas = self.tools.schemas()
+        schemas = self.schemas
         self.trace.log("start", phases=phases, strategy=self.strategy.name)
 
         for turn in range(1, self.max_turns + 1):
-            context_tokens = self.tokenizer.count(serialize_request(history, schemas))
+            context_tokens = self.count_context(history)
             request = with_suffix(history, self.strategy.on_request(history, turn, context_tokens))
             reuse = tracker.observe(serialize_request(request, schemas))
             prefixes.append(reuse)
