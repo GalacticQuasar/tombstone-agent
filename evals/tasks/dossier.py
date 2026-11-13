@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
+from typing import Literal
 
 from evals.env.web import MockWeb, Page
 
@@ -56,14 +57,17 @@ def _structure(rng: random.Random, names: NameGen, kind: tuple[str, str, str]) -
     )
 
 
-def _pages(rng: random.Random, s: Structure) -> tuple[list[Page], str, str]:
-    """Pages for one structure. Returns (pages, url of year/funder page, url of size page)."""
+def _pages(rng: random.Random, s: Structure, history_extra: tuple[str, ...] = ()) -> tuple[list[Page], str, str]:
+    """Pages for one structure. Returns (pages, url of year/funder page, url of size page).
+
+    `history_extra`: more facts buried in the history page (e.g. an aside asked about later)."""
     st = s.setting
     wrong_year = s.year + rng.choice([-1, 1]) * rng.randint(6, 30)
     specs = [
         ("history", [
             f"The {s.name} was completed in {s.year} after work led by the engineer {s.engineer}.",
             f"Construction of the {s.name} was funded by the {s.funder}.",
+            *history_extra,
         ]),
         ("survey", [f"The {s.attr} of the {s.name} measures {s.size} metres."]),
         ("repairs", [
@@ -93,33 +97,60 @@ def _pages(rng: random.Random, s: Structure) -> tuple[list[Page], str, str]:
 
 
 def dossier(variant: int, n_structures: int = 4) -> Task:
-    rng = random.Random(f"dossier-{variant}")
+    return dossier_task(f"dossier_{variant}", f"dossier-{variant}", n_structures, trap="funder")
+
+
+def dossier_task(
+    task_id: str, seed: str, n_structures: int, trap: Literal["funder", "lifeboat"] | None
+) -> Task:
+    """One structure per phase, then an optional trap phase about phase 0.
+
+    trap="funder": who funded the phase-0 structure (on its history page; searchable by name).
+    trap="lifeboat": who led the crew of a lifeboat mentioned in passing on the phase-0 history
+    page. The question doesn't name the structure and search only indexes titles, so the page
+    can't be found again without remembering it was read.
+    More structures than KINDS reuse kinds (names stay unique).
+    """
+    rng = random.Random(seed)
     names = NameGen(rng)
-    kinds = rng.sample(KINDS, n_structures)
+    kinds = rng.sample(KINDS, n_structures) if n_structures <= len(KINDS) else rng.choices(KINDS, k=n_structures)
     structures = [_structure(rng, names, k) for k in kinds]
+    first = structures[0]
+    boat = crew_lead = ""
+    if trap == "lifeboat":
+        boat, crew_lead = f"{names.place()} Star", names.person()
 
     pages: list[Page] = []
     labels: dict[tuple[str, str], SourceLabel] = {}
     phases: list[Phase] = []
     for i, s in enumerate(structures):
-        ps, history_url, survey_url = _pages(rng, s)
+        extra = ()
+        if i == 0 and trap == "lifeboat":
+            extra = (f"Moored below the {s.name} was the lifeboat {boat}, whose volunteer crew was led for "
+                     f"many years by {crew_lead}.",)
+        ps, history_url, survey_url = _pages(rng, s, extra)
         pages += ps
         for p in ps:
             labels[("web_fetch", p.url)] = SourceLabel("distractor", i)
-        labels[("web_fetch", history_url)] = SourceLabel("needed_later" if i == 0 else "relevant", i)
+        labels[("web_fetch", history_url)] = SourceLabel("needed_later" if i == 0 and trap else "relevant", i)
         labels[("web_fetch", survey_url)] = SourceLabel("relevant", i)
         phases.append(final_phase(
             f"Using the web tools, find the year the {s.name} was completed and its {s.attr} in metres. "
             f"Sources disagree, so check them.",
             "<year>, <metres>", str(s.year), str(s.size),
         ))
-    first = structures[0]
-    phases.append(final_phase(
-        f"Going back to the {first.name}: who funded its construction?", "<funder>", first.funder,
-    ))
+    if trap == "funder":
+        phases.append(final_phase(
+            f"Going back to the {first.name}: who funded its construction?", "<funder>", first.funder,
+        ))
+    elif trap == "lifeboat":
+        phases.append(final_phase(
+            f"One of the pages you read earlier mentioned the lifeboat {boat}. Who led its volunteer crew?",
+            "<person>", crew_lead,
+        ))
 
     return Task(
-        id=f"dossier_{variant}",
+        id=task_id,
         phases=phases,
         make_tools=lambda: MockWeb(pages).tools(),
         labels=labels,

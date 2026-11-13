@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from evals.metrics import forget_breakdown, reads_breakdown
+from evals.metrics import SOURCE_ARG, forget_breakdown, reads_breakdown
 from evals.tasks import TASKS
 from evals.tasks.base import final_grader, final_line
 from evals.tasks.chain import chain
@@ -14,8 +14,6 @@ from tombstone.messages import Message
 from tombstone.strategies import SelfForget
 from tombstone.tools import ToolRegistry
 from tombstone.trace import Trace
-
-SOURCE_ARG = {"web_fetch": "url", "read_file": "path"}
 
 
 def test_final_line_parsing():
@@ -61,8 +59,8 @@ def test_answers_live_on_non_distractor_sources():
     for t in TASKS.values():
         if t.id == "toy_bridge":
             continue
-        reg = ToolRegistry(t.make_tools())
         for i, phase in enumerate(t.phases):
+            reg = ToolRegistry(t.make_tools())  # fresh per phase: queue output is single-use
             keys = [k for k, lab in t.labels.items()
                     if lab.kind == "needed_later" or (lab.kind == "relevant" and lab.phase == i)]
             text = "\n".join(reg.dispatch(tool, {SOURCE_ARG[tool]: key})[0] for tool, key in keys)

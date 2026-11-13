@@ -8,7 +8,7 @@ from typing import Any
 from .tasks.base import Task
 
 # Argument that identifies a source for each labelled tool.
-SOURCE_ARG = {"web_fetch": "url", "read_file": "path"}
+SOURCE_ARG = {"web_fetch": "url", "read_file": "path", "poll_queue": "queue"}
 
 
 def block_labels(events: list[dict[str, Any]], task: Task) -> dict[str, str]:
