@@ -58,6 +58,7 @@ Done: core loop, forgetting, baselines, task suite, full Qwen matrix, and its re
 (see PLAN.md; strategy cost differences of ±15% didn't replicate across hosts, so cost claims need more seeds).
 Prior work: the mechanism is already published (PLAN.md "Related work"); frame results as the controlled
 study plus cost-aware apply, not as a new mechanism.
-Open, in rough priority: cost-aware apply rule (confirm before starting),
-longer horizons, harder tasks that separate accuracy, Llama second-family run, ablations
+Open, in rough priority: task suite redesign (PLAN.md "Next: task suite redesign": context-overflow
+handling first, then tasks targeting each strategy's weakness, with predictions fixed in advance),
+then the cost-aware apply rule (confirm before starting), Llama second-family run, ablations
 (immediate vs batched apply, ledger on/off, summary vs bare stub).

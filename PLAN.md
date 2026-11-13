@@ -176,6 +176,42 @@ Pooled with the DeepInfra matrix (6 seeds per cell, two hosts), ideal $: none 0.
 - **Operations:** 72 minutes at 18 requests/min with `JOBS=8`, and no rate-limit retries. One run (chain_2 self_forget s0) died on a transient HTTP 400 with an empty body at turn 2 (~1k-token prompt). Its trace was set aside and the configuration rerun, and the rerun passed. Seeds aren't reproducible on this host: the same seed gave different outputs at temperature 0.7.
 - **Implication:** the cost differences between none, self_forget and truncate (±15%) are about the size of the host-to-host and seed-to-seed noise. The robust results are accuracy (self_forget ≥ truncate > compact, though small n), peak-context reduction, and compact's cost penalty. Claims about cost need more seeds (GenAI Studio makes these free) or the cost-aware apply rule plus longer horizons. Longer horizons on this host will hit its 65,536-token context cap.
 
+## Next: task suite redesign (planned 2026-11-13, before the cost-aware apply rule)
+**Why:** across both matrices NoOp got 132/132 phases, and the cost gaps between strategies (±15%) are within host and seed noise. The suite can't show any strategy's weakness, so tuning a strategy on it (cost-aware apply) would be tuning against noise. Build tasks that target each strategy's predicted failure first.
+
+**Why the current tasks don't separate strategies:**
+- Contexts peak at ~35–50k tokens, so NoOp suffers no rot or overflow.
+- Every source can be fetched again for free (web pages, repo files), so truncate and compact lose nothing permanently; their cost shows up only as re-reads.
+- Decoys win only after a re-read, which is rare.
+
+**Planned tasks, with predictions written down before any run:**
+| Weakness | Task design | Predicted loser | Predicted winner |
+|---|---|---|---|
+| Context growth | Long horizon (10+ phases) that pushes NoOp past the context limit | none (overflows) | any managed strategy |
+| Context rot | Many near-duplicate decoys kept in context, then a question that needs the right one | none | self_forget, truncate |
+| Blind clearing | Tool output that can't be fetched again (one-time log, changing search results, command output), needed several phases later | truncate | self_forget (summary + archive) |
+| Lossy summaries | Later questions need exact strings (hashes, IDs) seen early | compact | self_forget (retrieves the original) |
+| Forgetting too early | A source that looks irrelevant when read but matters later, and can't be found again without knowing it exists | self_forget | none |
+| Overhead | Short tasks (1–2 phases) | self_forget | none |
+
+**Design rules:**
+- Include tasks where self_forget should lose (the last two rows), so the suite isn't rigged in its favor.
+- The predictions above are fixed now. If a pilot contradicts one, report it; don't tune the task until the expected winner wins. Fixing a solvability bug is fine.
+- Reuse `world.py`, MockWeb and FakeFS. The non-refetchable case needs a tool whose output is served only once, or changes between calls.
+
+**Prerequisite, context overflow:**
+- Today a too-long request crashes the run; GenAI Studio returns an HTTP 400.
+- Add an agent-side context limit (e.g. `--max-context`, checked with `count_context` before each request) that ends the run with `stopped: "context_overflow"`. Unanswered phases count as failures, and the run's cost so far is still recorded.
+- Enforcing the limit in the agent keeps behavior identical across hosts; DeepInfra's window is larger than GenAI Studio's 65,536. Set it below 65,536, leaving room for the completion.
+- Keep provider 400s as a separate error. The 400 on 2026-11-09 was transient, with an empty body.
+
+**Order:**
+1. Implement overflow handling, with tests.
+2. Build one task per row.
+3. Pilot each new task on `purdue-qwen3.8-27b`: 1 seed, all 4 strategies. Keep a task only if the strategies differ on it.
+4. Let `matrix.sh` take a seed list (it hard-codes `0 1 2`), then run the new suite with more seeds.
+5. Then start the cost-aware apply rule (confirm before starting).
+
 ## Build phases
 1. **Core loop + one backend.** Canonical types, OpenAI-compatible client, agent loop, mock tools, NoOp strategy, JSONL trace. Confirm the chosen model does reliable tool calls on the backend, and work out which backend usage/timing fields show prefix reuse. Exit: an agent solves a toy task end-to-end.
 2. **Context store + forgetting.** Block IDs, ledger, `forget` / `retrieve_context`, deferred apply, archive, simulated prefix metric. Unit tests for render/apply/retrieve and tool-pair integrity.
