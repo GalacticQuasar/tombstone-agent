@@ -1,0 +1,26 @@
+task        backend          strategy      n phases ok turns   prompt   peak reread  $m none  $m real  $m ideal  notes
+----------------------------------------------------------------------------------------------------------------------
+chain_1     purdue-qwen3.8-27b none          3       6/6  23.7   481.5k  45.6k    0.0    77.58    77.58     28.08  
+chain_1     purdue-qwen3.8-27b self_forget   3       5/6  19.7   205.3k  19.5k    0.0    37.12    37.12     19.65  forgot=17.3333
+chain_1     purdue-qwen3.8-27b truncate      3       6/6  17.0   177.3k  18.8k    0.0    31.00    31.00     16.43  truncations=2.33333
+chain_1     purdue-qwen3.8-27b compact       3       4/6  17.7   181.4k  19.3k    0.7    37.12    37.12     23.82  compactions=1.33333
+chain_2     purdue-qwen3.8-27b none          3       6/6  15.3   271.1k  38.1k    0.0    44.66    44.66     18.28  
+chain_2     purdue-qwen3.8-27b self_forget   3       6/6  18.7   197.8k  20.5k    0.0    36.15    36.15     19.95  forgot=20.3333
+chain_2     purdue-qwen3.8-27b truncate      3       6/6  18.0   191.1k  18.3k    2.0    33.03    33.03     16.76  truncations=2.33333
+chain_2     purdue-qwen3.8-27b compact       3       4/6  16.3   157.3k  16.7k    3.7    31.90    31.90     21.46  compactions=1.33333
+dossier_1   purdue-qwen3.8-27b none          3     15/15  14.0   290.9k  42.6k    0.0    51.76    51.76     23.52  
+dossier_1   purdue-qwen3.8-27b self_forget   3     15/15  20.0   302.8k  30.3k    2.0    57.03    57.03     29.77  forgot=25 retrieved=2.33333
+dossier_1   purdue-qwen3.8-27b truncate      3     15/15  19.7   207.2k  15.8k    5.3    43.25    43.25     25.58  truncations=3.66667
+dossier_1   purdue-qwen3.8-27b compact       3     15/15  20.3   214.9k  15.6k   14.3    47.34    47.34     35.03  compactions=3
+dossier_2   purdue-qwen3.8-27b none          3     15/15  16.7   321.8k  42.3k    0.0    55.50    55.50     23.76  
+dossier_2   purdue-qwen3.8-27b self_forget   3     15/15  18.3   261.9k  31.1k    4.7    48.50    48.50     25.62  forgot=14.6667
+dossier_2   purdue-qwen3.8-27b truncate      3     15/15  18.0   193.9k  16.6k    5.0    39.82    39.82     23.23  truncations=3
+dossier_2   purdue-qwen3.8-27b compact       3     15/15  24.3   268.0k  16.5k   21.3    56.32    56.32     40.54  compactions=3.66667
+repo_1      purdue-qwen3.8-27b none          3     12/12  11.3   107.0k  20.7k    0.0    19.11    19.11      9.38  
+repo_1      purdue-qwen3.8-27b self_forget   3     12/12  15.3   128.2k  17.3k    1.0    23.79    23.79     12.39  forgot=6.66667 retrieved=0.333333
+repo_1      purdue-qwen3.8-27b truncate      3     12/12  12.0    87.3k  13.9k    1.0    15.92    15.92      8.55  truncations=1
+repo_1      purdue-qwen3.8-27b compact       3     12/12  14.7   107.7k  13.9k    8.0    20.54    20.54     13.43  compactions=1
+repo_2      purdue-qwen3.8-27b none          3     12/12  11.0   109.7k  21.5k    0.0    19.40    19.40      9.42  
+repo_2      purdue-qwen3.8-27b self_forget   3     12/12  13.7   107.0k  15.3k    1.0    20.47    20.47     11.62  forgot=10 retrieved=0.666667
+repo_2      purdue-qwen3.8-27b truncate      3     11/12  13.3   107.7k  14.8k    4.0    19.52    19.52     10.36  truncations=1
+repo_2      purdue-qwen3.8-27b compact       3     12/12  14.3   114.1k  14.3k    8.0    21.79    21.79     14.21  compactions=1

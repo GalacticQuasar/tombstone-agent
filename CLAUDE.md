@@ -14,11 +14,12 @@ experiment's findings. Read it before changing behavior, and append new findings
 uv run pytest -q                                   # unit tests, no network
 uv run python -m evals.run --task toy_bridge --strategy self_forget --backend or-qwen3.8-27b
 evals/matrix.sh runs/<name> or-qwen3.8-27b 0.7     # 6 tasks × 4 strategies × 3 seeds, JOBS=8 parallel (~$2.60)
+evals/matrix.sh runs/<name> purdue-qwen3.8-27b 0.7 # same matrix, free on Purdue GenAI Studio (~75 min, throttled)
 uv run python -m evals.report runs/<name>          # per task/strategy table, $ under none/real/ideal cache
 ```
 Each run writes `runs/<dir>/<run-id>/{trace.jsonl,summary.json,archive/}`. `runs/` is git-ignored;
 after an experiment, `uv run python -m evals.export runs/<name> results/<name>.jsonl` and save the
-report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix and pilot).
+report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix, purdue-matrix and pilot).
 
 ## Layout
 - `src/tombstone/`: `messages.py` (canonical types → OpenAI format), `client.py` (backend
@@ -39,8 +40,10 @@ report to `results/<name>_report.txt` so the numbers are committed (`results/` h
 ## Models and secrets
 - Primary: `or-qwen3.8-27b` (OpenRouter, pinned to DeepInfra bf16, exact HF tokenizer).
   Second family: `or-llama3.3-70b` (approx tokenizer; HF repo is gated). `ollama-glm-flash`
-  is the CLI default for cheap local iteration.
-- `OPENROUTER_API_KEY` lives in git-ignored `.env`. Never print or commit it.
+  is the CLI default for cheap local iteration. Free: `purdue-qwen3.8-27b` (Purdue RCAC GenAI Studio,
+  same model name, unknown quantization; throttled to 18 req/min across processes; 65,536-token
+  context; no `cached_tokens`; seeds not reproducible). Don't mix its runs with DeepInfra runs in one comparison.
+- `OPENROUTER_API_KEY` and `GENAI_API_KEY` live in git-ignored `.env`. Never print or commit them.
 - Paid runs cost real money: say roughly what a batch will cost before launching it.
 
 ## Measurement gotchas
@@ -48,10 +51,11 @@ report to `results/<name>_report.txt` so the numbers are committed (`results/` h
   Provider `cached_tokens` is noisy (identical behavior gave a 34% cost difference) and
   per-run variance is ±40–80%.
 - Use temperature 0.7 for multi-seed runs; at 0 seeds mostly repeat.
-- `report.PRICES` only has Qwen; add an entry for any new backend you want priced.
+- `report.PRICES` only has the Qwen backends; add an entry for any new backend you want priced.
 
 ## Status
-Done: core loop, forgetting, baselines, task suite, full Qwen matrix (see PLAN.md).
+Done: core loop, forgetting, baselines, task suite, full Qwen matrix, and its replication on GenAI Studio
+(see PLAN.md; strategy cost differences of ±15% didn't replicate across hosts, so cost claims need more seeds).
 Prior work: the mechanism is already published (PLAN.md "Related work"); frame results as the controlled
 study plus cost-aware apply, not as a new mechanism.
 Open, in rough priority: cost-aware apply rule (confirm before starting),

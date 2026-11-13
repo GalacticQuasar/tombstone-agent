@@ -82,6 +82,9 @@ tests/
 | **Primary** | `or-qwen3.8-27b` | `qwen/qwen3.8-27b` @ DeepInfra bf16 | ✅ |
 | **Second family** | `or-llama3.3-70b` | `meta-llama/llama-3.3-70b-instruct` @ AkashML fp8 | ✅ |
 | Cheap iteration | `ollama-glm-flash` (CLI default) | `glm-5.3-flash:cloud` | ✅ |
+| Free replication (added 2026-11-09) | `purdue-qwen3.8-27b` | `qwen3.8:27b` @ Purdue RCAC GenAI Studio (vLLM; quantization unpublished) | ❌ |
+
+- GenAI Studio: free for Purdue users (pilot); key `GENAI_API_KEY`. Limit is 20 requests/min per user, so the client throttles to 18 across processes and retries a `null`/429 response with backoff. 65,536-token context. Seeds not reproducible.
 
 - Pinning: `provider.order=[tag]`, `allow_fallbacks=false`. Key in git-ignored `.env` (`OPENROUTER_API_KEY`).
 - Rejected: llama-3.1-8b (dropped a required tool argument); qwen3-235b-a22b-2507 and qwen3.6-35b-a3b (no cache reporting).
@@ -150,6 +153,28 @@ Qwen 3.8 27B, temperature 0.7, 6 task variants × 4 strategies × 3 seeds = 72 r
 - Forget precision: 232 distractor, 96 relevant (finished phases), 13 needed_later, 4 unlabeled.
 - **Per-run variance is large** (±40–80% relative cost vs NoOp across seeds/tasks). Use suite totals, not per-task means.
 - Implication: self_forget's advantage is reliability plus lower peak context, not cost. To win on cost with caching, it needs the cost-aware apply rule and/or longer horizons, and accuracy needs harder tasks to separate the strategies.
+
+## Replication on Purdue GenAI Studio (2026-11-09) — `runs/purdue-matrix`, $0
+Per-run data: `results/purdue-matrix.jsonl`; table: `results/purdue-matrix_report.txt`.
+Same suite, seeds and temperature (0.7) as the 2026-10-28 matrix, on backend `purdue-qwen3.8-27b`: Purdue RCAC GenAI Studio, `qwen3.8:27b` on vLLM 0.30.0. Its quantization isn't published, so don't assume it equals DeepInfra bf16. Costs use DeepInfra prices so they compare; the service itself is free.
+The host reports no `cached_tokens`, so the real column equals no cache and the ideal (simulated) column is the only cache measure.
+
+| strategy | phase acc (of 66) | prompt tok | $ no cache | $ ideal cache | peak prompt | re-reads |
+|---|---|---|---|---|---|---|
+| none | **66/66** | 4.75M | 0.80 | 0.34 | 35.1k | 0 |
+| self_forget | 65/66 | 3.61M (−24%) | 0.67 (−17%) | 0.36 (+6%) | 22.3k | 26 |
+| truncate | 65/66 | **2.89M (−39%)** | **0.55 (−32%)** | **0.30 (−10%)** | 16.4k | 52 |
+| compact | 62/66 | 3.13M (−34%) | 0.65 (−20%) | 0.45 (+32%) | 16.1k | 168 |
+
+Pooled with the DeepInfra matrix (6 seeds per cell, two hosts), ideal $: none 0.76, self_forget 0.85 (+12%), truncate 0.77 (+1%), compact 1.14 (+50%). Phase accuracy (of 132): none 132, self_forget 131, truncate 128, compact 127.
+
+- **Truncate's cost sign flipped.** It went from +11% vs NoOp (DeepInfra) to −10% here, ending cheapest of all on ideal cost. Pooled, it ties NoOp. One 72-run matrix can't rank truncate against NoOp; that needs more seeds.
+- **Replicated:** self_forget costs a bit more than NoOp with ideal caching (+6% here, +15% before) and less without caching. It cuts peak context by about 37% (35.1k → 22.3k). Compact is worst on ideal cost both times.
+- **self_forget's one miss isn't a forgetting failure.** In chain_1 s1, phase 2, the page said "Nadia Bruthora was born in Birholt." The model read it, didn't forget it, and answered `Birkholt` on the next turn: a copying error. Truncate's miss (repo_2 s0: `90, 10` vs `60, 10`) and compact's 4 chain misses (wrong birthplace) weren't inspected.
+- **Forget behavior replicated almost exactly.** Forgets by label: 233 distractor, 95 relevant, 14 needed_later, 3 unlabeled (vs 232/96/13/4). There were 10 retrievals, 12/18 runs forgot a `needed_later` source, and every trap phase passed.
+- **Re-reads were lower for truncate (52 vs 127) and higher for self_forget (26 vs 7).** Re-reads aren't stable across hosts either.
+- **Operations:** 72 minutes at 18 requests/min with `JOBS=8`, and no rate-limit retries. One run (chain_2 self_forget s0) died on a transient HTTP 400 with an empty body at turn 2 (~1k-token prompt). Its trace was set aside and the configuration rerun, and the rerun passed. Seeds aren't reproducible on this host: the same seed gave different outputs at temperature 0.7.
+- **Implication:** the cost differences between none, self_forget and truncate (±15%) are about the size of the host-to-host and seed-to-seed noise. The robust results are accuracy (self_forget ≥ truncate > compact, though small n), peak-context reduction, and compact's cost penalty. Claims about cost need more seeds (GenAI Studio makes these free) or the cost-aware apply rule plus longer horizons. Longer horizons on this host will hit its 65,536-token context cap.
 
 ## Build phases
 1. **Core loop + one backend.** Canonical types, OpenAI-compatible client, agent loop, mock tools, NoOp strategy, JSONL trace. Confirm the chosen model does reliable tool calls on the backend, and work out which backend usage/timing fields show prefix reuse. Exit: an agent solves a toy task end-to-end.
