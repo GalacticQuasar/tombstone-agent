@@ -205,12 +205,51 @@ Pooled with the DeepInfra matrix (6 seeds per cell, two hosts), ideal $: none 0.
 - Enforcing the limit in the agent keeps behavior identical across hosts; DeepInfra's window is larger than GenAI Studio's 65,536. Set it below 65,536, leaving room for the completion.
 - Keep provider 400s as a separate error. The 400 on 2026-11-09 was transient, with an empty body.
 
-**Order:**
+**Order** (1–4 done 2026-11-13, see the next section):
 1. Implement overflow handling, with tests.
 2. Build one task per row.
 3. Pilot each new task on `purdue-qwen3.8-27b`: 1 seed, all 4 strategies. Keep a task only if the strategies differ on it.
 4. Let `matrix.sh` take a seed list (it hard-codes `0 1 2`), then run the new suite with more seeds.
 5. Then start the cost-aware apply rule (confirm before starting).
+
+## Suite v2 + overflow handling + pilot (2026-11-13) — `runs/v2-pilot`, $0
+Per-run data: `results/v2-pilot.jsonl`; table: `results/v2-pilot_report.txt`.
+
+**Built (steps 1, 2 and 4 of the redesign order):**
+- Overflow: `Agent(max_context=)` / `--max-context` (default 60,000) counts each request, ledger included, before sending it. If it's over the limit, the run ends with `stopped: "context_overflow"`, the request isn't sent, unanswered phases fail, and the cost so far is kept. The report shows `overflow=n/N`. `--max-turns` default 80 → 200 (no earlier run reached 80).
+- Client: a 400 with an **empty body** is retried with the rate-limit backoff. It's transient on GenAI Studio: 6 of the 24 pilot runs hit it, 5 of them within 2 minutes, on requests of 0.4–20k tokens, and all 6 passed on rerun. A 400 with an error message (e.g. context too long) is still raised.
+- Tasks (`SUITE_V2`, variants 1 and 2; `dossier_1/2` text checked byte-identical after the refactor):
+
+| task | targets | design |
+|---|---|---|
+| `horizon` | growth | 14 dossier phases, ~130k tokens of sources |
+| `rot` | rot | 45 station logs with neutral file names (`log_NN.txt`), in look-alike families (KV7/KV7A/KV7B) whose readings differ by small nonzero offsets; 8 lookups + a phase-0 trap; ~45k tokens if every log is read (under the limit) |
+| `queue` | blind clearing | `poll_queue` delivers each message once (new `QueueEnv`); the last phase needs a commit hash from the phase-0 poll; ~21k tokens, so truncate fires |
+| `exact` | lossy summaries | build catalog reachable only through opaque links (`web_fetch` only); each phase finds the release that "Fixes #N" among near misses; the trap asks for the 16-hex arm64 checksum of the phase-0 build and repeats no URL |
+| `buried` | forgetting too early | dossier with an aside on the phase-0 history page (a lifeboat and its crew leader), asked in the last phase; search indexes titles only, so it can't be found again |
+| `short` | overhead | 2 dossier phases |
+
+- `matrix.sh` takes `TASKS`, `SEEDS`, `STRATEGIES` and `EXTRA` from the environment.
+
+**Pilot:** `purdue-qwen3.8-27b`, variant 1, seed 0, temperature 0.7, all 4 strategies (24 runs). Ideal-cache $m (DeepInfra prices), phases correct:
+
+| task | none | self_forget | truncate | compact | prediction |
+|---|---|---|---|---|---|
+| horizon_1 | **6/14** (overflow after phase 6), 42.4 | 14/14, 98.1 | 14/14, 55.2 | 14/14, 93.1 | none loses: ✅ |
+| rot_1 | 9/9, 30.4 | 9/9, 34.6 | 9/9, 64.6 (180 re-reads) | **7/9**, 115.1 | none loses: ❌ (none was perfect) |
+| queue_1 | 6/6, 11.5 | 6/6, 12.9 | **5/6**, 16.8 | **5/6**, 14.8 | truncate loses: ✅ (compact too) |
+| exact_1 | **5/6**, 29.6 | 6/6, 40.6 | 6/6, 30.8 | **2/6**, 12.8 | compact loses: ✅, but not on the trap phase |
+| buried_1 | 5/5, 19.1 | 5/5, 28.8 | 5/5, 25.6 | **4/5**, 23.3 | self_forget loses: ❌ |
+| short_1 | 2/2, 9.0 | 2/2, 12.6 (+39%) | 2/2, 11.4 | 2/2, 13.5 | self_forget costs more than none: ✅ (n=1) |
+
+- **horizon:** none overflowed with 57.7k in context. self_forget forgot 76 blocks (48 distractors, 28 relevant from finished phases) in 7 batch applies, but cost 1.8× truncate (55 turns vs 43). Each apply re-prefills the suffix, so this is the task the cost-aware apply rule should be measured on.
+- **rot:** the confusion it targets didn't happen. none answered all 9 at 48k context. Compact's 2 misses (e.g. `40, 1016.4` for WX7B, whose row reads `37, 1016.3`) match none of the 3 sibling rows, so they're post-compaction confabulation. Truncate re-read 180 times (it can't remember which file holds which station) and cost 2× none. As built, rot measures re-read cost, not rot.
+- **queue:** truncate and compact both re-polled the drained queue, found it empty, and declined to answer (no guess). self_forget forgot the deploys block, then retrieved it.
+- **exact:** compact's summary dropped the catalog URL, and phases 1+ say "from the same catalog", so it stalled in phase 2 ("I don't have access to the catalog"). That's a lossy summary, but in an earlier phase than the trap. none got the trap wrong by copying the darwin-arm64 row instead of linux-arm64 from the right page at 55.6k context: a rot-type error, and the only one in the pilot. self_forget answered the trap from its own summary, without retrieving.
+- **buried:** self_forget didn't lose. Asked about a lifeboat it hadn't summarized, it retrieved 15 forgotten blocks in bulk until it found it (peak 39.7k, +50% ideal cost vs none). Its weakness here shows up as **cost**, not accuracy. Compact said no page mentioned the lifeboat.
+- **Which tasks separate strategies (step 3 criterion):** horizon, queue, exact and buried separate strategies on accuracy; short and rot only on cost. Keep all six for the multi-seed run. Rot and short are cheap, and one seed can't show an accuracy gap of a few percent.
+- **Open decision, not applied (it would mean tuning after seeing results):** restating the catalog URL in exact's phases 1–4 (not in the trap) would make compact fail on the targeted phase rather than earlier. The current failure is a legitimate lossy summary, so the task is unchanged.
+- **Next:** multi-seed v2 matrix on GenAI Studio (free): `TASKS="<SUITE_V2>" SEEDS="0 1 2" evals/matrix.sh runs/v2-matrix purdue-qwen3.8-27b 0.7`, 144 runs. horizon dominates the runtime (~50 turns per run), so expect several hours at 18 req/min. Then the cost-aware apply rule (confirm first), measured on horizon.
 
 ## Build phases
 1. **Core loop + one backend.** Canonical types, OpenAI-compatible client, agent loop, mock tools, NoOp strategy, JSONL trace. Confirm the chosen model does reliable tool calls on the backend, and work out which backend usage/timing fields show prefix reuse. Exit: an agent solves a toy task end-to-end.

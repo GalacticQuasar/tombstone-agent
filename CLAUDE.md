@@ -15,24 +15,29 @@ uv run pytest -q                                   # unit tests, no network
 uv run python -m evals.run --task toy_bridge --strategy self_forget --backend or-qwen3.8-27b
 evals/matrix.sh runs/<name> or-qwen3.8-27b 0.7     # 6 tasks × 4 strategies × 3 seeds, JOBS=8 parallel (~$2.60)
 evals/matrix.sh runs/<name> purdue-qwen3.8-27b 0.7 # same matrix, free on Purdue GenAI Studio (~75 min, throttled)
+TASKS="rot_1 queue_1" SEEDS="0 1 2 3 4" evals/matrix.sh runs/<name> purdue-qwen3.8-27b 0.7  # pick tasks/seeds (SUITE_V2 in evals/tasks)
+# matrix.sh is resumable: rerun the same command and it skips finished runs (moves unfinished dirs to <out>-unfinished/)
 uv run python -m evals.report runs/<name>          # per task/strategy table, $ under none/real/ideal cache
 ```
 Each run writes `runs/<dir>/<run-id>/{trace.jsonl,summary.json,archive/}`. `runs/` is git-ignored;
 after an experiment, `uv run python -m evals.export runs/<name> results/<name>.jsonl` and save the
-report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix, purdue-matrix and pilot).
+report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix, purdue-matrix, pilot and v2-pilot).
 
 ## Layout
 - `src/tombstone/`: `messages.py` (canonical types → OpenAI format), `client.py` (backend
   profiles), `context.py` (ContextStore: blocks, pending forgets, batched apply, archive,
   ledger), `strategies.py` (NoOp, SelfForget, Truncate, AutoCompact), `agent.py` (loop),
   `prefix.py` (tokenizers, `serialize_request`, simulated prefix-reuse metric), `trace.py`.
-- `evals/`: `env/` (MockWeb, FakeFS), `tasks/` (seeded multi-phase tasks with source labels
-  distractor/relevant/needed_later), `metrics.py`, `run.py`, `report.py`, `matrix.sh`.
+- `evals/`: `env/` (MockWeb, FakeFS, QueueEnv: output delivered once), `tasks/` (seeded multi-phase tasks with source labels
+  distractor/relevant/needed_later; v1 = dossier/chain/repo, v2 = horizon/rot/queue/exact/buried/short, one per
+  strategy weakness), `metrics.py`, `run.py`, `report.py`, `matrix.sh`.
 
 ## Invariants (tests cover these; keep them)
 - Only tool-result *content* is ever rewritten, so tool_call/tool_result pairing stays valid.
 - Retrieval is append-only (a new tool result); tombstones stay in place.
 - The ledger is ephemeral: a trailing user message rendered per request, never stored in history.
+- Runs stop with `stopped: "context_overflow"` before sending a request over `--max-context` (default 60,000,
+  counted with the ledger); unanswered phases fail. Provider errors (HTTP 400) still crash the run.
 - All strategy thresholds use the agent's `count_context` (full request incl. tool schemas,
   model tokenizer) so they share units with the real prompt.
 - Graders are token-exact on the `FINAL:` line; decoys differ by small details (e.g. `legacy_` prefix).
@@ -58,7 +63,7 @@ Done: core loop, forgetting, baselines, task suite, full Qwen matrix, and its re
 (see PLAN.md; strategy cost differences of ±15% didn't replicate across hosts, so cost claims need more seeds).
 Prior work: the mechanism is already published (PLAN.md "Related work"); frame results as the controlled
 study plus cost-aware apply, not as a new mechanism.
-Open, in rough priority: task suite redesign (PLAN.md "Next: task suite redesign": context-overflow
-handling first, then tasks targeting each strategy's weakness, with predictions fixed in advance),
-then the cost-aware apply rule (confirm before starting), Llama second-family run, ablations
+Suite v2 (one task per strategy weakness) + overflow handling built and piloted, 1 seed (PLAN.md
+"Suite v2 + overflow handling + pilot").
+Open, in rough priority: multi-seed v2 matrix on GenAI Studio, then the cost-aware apply rule (confirm before starting), Llama second-family run, ablations
 (immediate vs batched apply, ledger on/off, summary vs bare stub).
