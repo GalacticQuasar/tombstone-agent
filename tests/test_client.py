@@ -79,6 +79,12 @@ def test_gives_up_after_all_retries(make_client):
         c.complete(USER, [])
 
 
+def test_empty_400_is_retried(make_client):
+    c, sleeps = make_client([(400, None), (200, OK)])
+    assert c.complete(USER, []).message.content == "hi"
+    assert sleeps == [client_mod.RETRY_DELAYS[0]]
+
+
 def test_other_errors_are_not_retried(make_client):
     c, sleeps = make_client([(400, {"error": "bad"})])
     with pytest.raises(Exception, match="400"):

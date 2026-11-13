@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from openai import APIResponseValidationError, OpenAI, RateLimitError
+from openai import APIResponseValidationError, BadRequestError, OpenAI, RateLimitError
 
 from .messages import Message, ToolCall, render
 
@@ -110,7 +110,8 @@ def parse_tool_call(id: str, name: str, raw: str) -> ToolCall:
     return ToolCall(id=id, name=name, arguments=args, raw_arguments=raw)
 
 
-# Waits before retrying a rate-limited request. GenAI Studio may signal this with a JSON null body.
+# Waits before retrying a rate-limited or transiently failed request. GenAI Studio may signal these with
+# a JSON null body (HTTP 200) or an HTTP 400 with an empty body.
 RETRY_DELAYS = (15.0, 30.0, 60.0, 120.0, 240.0)
 
 
@@ -148,7 +149,10 @@ class OpenAIChatClient:
         self._throttle = SlotThrottle(backend.name, backend.max_rpm) if backend.max_rpm else None
 
     def _create(self, messages: list[Message], tools: list[dict[str, Any]]) -> Any:
-        """Send one request, backing off when the backend rate-limits it."""
+        """Send one request, backing off when the backend rate-limits it or fails transiently.
+
+        A 400 with an empty body is transient on GenAI Studio (same request succeeds later); a 400
+        that explains itself (e.g. context too long) is a real error and is raised."""
         for delay in (*RETRY_DELAYS, None):
             if self._throttle:
                 self._throttle.wait()
@@ -165,8 +169,11 @@ class OpenAIChatClient:
                     return resp
             except (RateLimitError, APIResponseValidationError):
                 pass
+            except BadRequestError as e:
+                if e.body:
+                    raise
             if delay is not None:
-                print(f"rate-limited by {self.backend.name}; retrying in {delay:.0f}s", file=sys.stderr)
+                print(f"rate-limited or transient error from {self.backend.name}; retrying in {delay:.0f}s", file=sys.stderr)
                 time.sleep(delay)
         raise RuntimeError(f"backend {self.backend.name!r} still rate-limiting after {len(RETRY_DELAYS)} retries")
 
