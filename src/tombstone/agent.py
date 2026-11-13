@@ -17,7 +17,7 @@ from .trace import Trace
 class RunResult:
     answers: list[str | None]  # one per phase; None for phases not reached
     turns: int
-    stopped: str  # "answer" | "max_turns"
+    stopped: str  # "answer" | "max_turns" | "context_overflow"
     history: list[Message]
     usage: list[Usage] = field(default_factory=list)
     prefix: list[PrefixReuse] = field(default_factory=list)
@@ -59,6 +59,7 @@ class Agent:
         max_turns: int = 30,
         run_dir: Path | None = None,
         tokenizer: Tokenizer | None = None,
+        max_context: int | None = None,
     ):
         self.client = client
         self.trace = trace or Trace(None)
@@ -72,6 +73,9 @@ class Agent:
         addendum = self.strategy.system_prompt_addendum()
         self.system_prompt = f"{system_prompt}\n\n{addendum}" if addendum else system_prompt
         self.max_turns = max_turns
+        # Largest request (count_context, ledger included) the agent will send. Enforced here,
+        # not by the host, so every backend stops at the same size; leave room for the completion.
+        self.max_context = max_context
         self._block_counter = 0
 
     def count_context(self, history: list[Message]) -> int:
@@ -98,6 +102,15 @@ class Agent:
         for turn in range(1, self.max_turns + 1):
             context_tokens = self.count_context(history)
             request = with_suffix(history, self.strategy.on_request(history, turn, context_tokens))
+            if self.max_context is not None:
+                request_tokens = self.count_context(request)
+                if request_tokens > self.max_context:
+                    self.trace.log(
+                        "end", stopped="context_overflow", turns=turn - 1,
+                        request_tokens=request_tokens, max_context=self.max_context,
+                    )
+                    answers += [None] * (len(phases) - len(answers))
+                    return RunResult(answers, turn - 1, "context_overflow", history, usages, prefixes)
             reuse = tracker.observe(serialize_request(request, schemas))
             prefixes.append(reuse)
             completion = self.client.complete(request, schemas)

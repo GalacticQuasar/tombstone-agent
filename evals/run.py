@@ -46,7 +46,10 @@ def main() -> None:
     ap.add_argument("--backend", default="ollama-glm-flash", choices=sorted(BACKENDS))
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--temperature", type=float, default=0.0)
-    ap.add_argument("--max-turns", type=int, default=80)
+    ap.add_argument("--max-turns", type=int, default=200)
+    ap.add_argument("--max-context", type=int, default=60_000,
+                    help="stop with context_overflow before sending a request larger than this (tokens); "
+                         "below GenAI Studio's 65,536 window, leaving room for the completion")
     ap.add_argument("--runs-dir", type=Path, default=Path("runs"))
     ap.add_argument("--apply-threshold", type=int, default=10_000, help="self_forget: batch-apply threshold (tokens)")
     ap.add_argument("--no-ledger", action="store_true", help="self_forget: hide the per-turn block ledger")
@@ -69,6 +72,7 @@ def main() -> None:
         max_turns=args.max_turns,
         run_dir=run_dir,
         tokenizer=HFTokenizer(backend.tokenizer) if backend.tokenizer else ApproxTokenizer(),
+        max_context=args.max_context,
     )
     try:
         result = agent.run(task.prompts)
@@ -84,6 +88,7 @@ def main() -> None:
         "backend": args.backend,
         "seed": args.seed,
         "temperature": args.temperature,
+        "max_context": args.max_context,
         "success": all(phase_ok),
         "phase_success": phase_ok,
         "stopped": result.stopped,

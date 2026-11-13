@@ -95,6 +95,9 @@ def main() -> None:
             v = mean(lambda s, c, k=key: s.get(k, 0))
             if v:
                 notes.append(f"{label}={v:g}")
+        overflows = sum(s.get("stopped") == "context_overflow" for s, _ in runs)
+        if overflows:
+            notes.append(f"overflow={overflows}/{n}")
         print(f"{task:11} {backend:16} {strategy:12} {n:>2} {f'{ok}/{total}':>9} {mean(lambda s, c: s['turns']):5.1f} "
               f"{mean(lambda s, c: c.prompt + c.aux_prompt) / 1000:7.1f}k {mean(lambda s, c: c.peak_prompt) / 1000:5.1f}k "
               f"{mean(lambda s, c: c.rereads):6.1f} {costs[0]} {costs[1]} {costs[2]:>9}  {' '.join(notes)}")
