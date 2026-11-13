@@ -19,6 +19,8 @@ from .metrics import SOURCE_ARG
 # $ per million tokens: (input, cache read, output). From OpenRouter endpoint listings.
 PRICES: dict[str, tuple[float, float, float]] = {
     "or-qwen3.8-27b": (0.15, 0.0375, 1.875),
+    # Actually free; priced like OpenRouter so costs compare. No cached_tokens, so "real" equals "none".
+    "purdue-qwen3.8-27b": (0.15, 0.0375, 1.875),
 }
 
 

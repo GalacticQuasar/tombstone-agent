@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
+import sys
+import tempfile
+import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
-from openai import OpenAI
+from openai import APIResponseValidationError, OpenAI, RateLimitError
 
 from .messages import Message, ToolCall, render
 
@@ -22,6 +27,8 @@ class Backend:
     extra_body: dict[str, Any] | None = None
     # Hugging Face repo whose tokenizer matches the model; None → approximate counts.
     tokenizer: str | None = None
+    # Requests per minute allowed for this backend, shared by all local processes.
+    max_rpm: int | None = None
 
 
 BACKENDS: dict[str, Backend] = {
@@ -30,6 +37,16 @@ BACKENDS: dict[str, Backend] = {
     "ollama-glm-flash": Backend("ollama-glm-flash", "http://localhost:11434/v1", "glm-5.3-flash:cloud"),
     # Tool calling works; cached_tokens is always reported as 0.
     "ollama-kimi": Backend("ollama-kimi", "http://localhost:11434/v1", "kimi-k3:cloud"),
+    # Purdue RCAC GenAI Studio (free for Purdue users). Limit is 20 requests/min per user; 18 leaves a margin.
+    # Context is capped at 65,536 tokens and usage has no cached_tokens.
+    "purdue-qwen3.8-27b": Backend(
+        "purdue-qwen3.8-27b",
+        "https://genai.rcac.purdue.edu/api",
+        "qwen3.8:27b",
+        api_key_env="GENAI_API_KEY",
+        tokenizer="Qwen/Qwen3.8-27B",
+        max_rpm=18,
+    ),
 }
 
 
@@ -93,6 +110,29 @@ def parse_tool_call(id: str, name: str, raw: str) -> ToolCall:
     return ToolCall(id=id, name=name, arguments=args, raw_arguments=raw)
 
 
+# Waits before retrying a rate-limited request. GenAI Studio may signal this with a JSON null body.
+RETRY_DELAYS = (15.0, 30.0, 60.0, 120.0, 240.0)
+
+
+class SlotThrottle:
+    """Spaces requests evenly across processes by reserving send times in a locked file."""
+
+    def __init__(self, name: str, rpm: int):
+        self.path = Path(tempfile.gettempdir()) / f"tombstone-throttle-{name}"
+        self.interval = 60.0 / rpm
+
+    def wait(self) -> None:
+        with self.path.open("a+") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)  # released when the file closes
+            f.seek(0)
+            raw = f.read().strip()
+            now = time.time()
+            slot = max(now, float(raw) if raw else 0.0)
+            f.truncate(0)
+            f.write(str(slot + self.interval))
+        time.sleep(max(0.0, slot - now))
+
+
 class OpenAIChatClient:
     def __init__(self, backend: Backend, temperature: float = 0.0, seed: int | None = None):
         self.backend = backend
@@ -105,16 +145,33 @@ class OpenAIChatClient:
         else:
             api_key = "unused"
         self._client = OpenAI(base_url=backend.base_url, api_key=api_key)
+        self._throttle = SlotThrottle(backend.name, backend.max_rpm) if backend.max_rpm else None
+
+    def _create(self, messages: list[Message], tools: list[dict[str, Any]]) -> Any:
+        """Send one request, backing off when the backend rate-limits it."""
+        for delay in (*RETRY_DELAYS, None):
+            if self._throttle:
+                self._throttle.wait()
+            try:
+                resp = self._client.chat.completions.create(
+                    model=self.backend.model,
+                    messages=render(messages),
+                    tools=tools or None,
+                    temperature=self.temperature,
+                    seed=self.seed,
+                    extra_body=self.backend.extra_body,
+                )
+                if resp is not None and getattr(resp, "choices", None):
+                    return resp
+            except (RateLimitError, APIResponseValidationError):
+                pass
+            if delay is not None:
+                print(f"rate-limited by {self.backend.name}; retrying in {delay:.0f}s", file=sys.stderr)
+                time.sleep(delay)
+        raise RuntimeError(f"backend {self.backend.name!r} still rate-limiting after {len(RETRY_DELAYS)} retries")
 
     def complete(self, messages: list[Message], tools: list[dict[str, Any]]) -> Completion:
-        resp = self._client.chat.completions.create(
-            model=self.backend.model,
-            messages=render(messages),
-            tools=tools or None,
-            temperature=self.temperature,
-            seed=self.seed,
-            extra_body=self.backend.extra_body,
-        )
+        resp = self._create(messages, tools)
         choice = resp.choices[0]
         msg = choice.message
         calls = [
