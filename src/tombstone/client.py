@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from openai import APIResponseValidationError, BadRequestError, OpenAI, RateLimitError
+from openai import APIResponseValidationError, BadRequestError, InternalServerError, OpenAI, RateLimitError
 
 from .messages import Message, ToolCall, render
 
@@ -111,8 +111,18 @@ def parse_tool_call(id: str, name: str, raw: str) -> ToolCall:
 
 
 # Waits before retrying a rate-limited or transiently failed request. GenAI Studio may signal these with
-# a JSON null body (HTTP 200) or an HTTP 400 with an empty body.
+# a JSON null body (HTTP 200), an HTTP 400 with no error message, or a 5xx (e.g. 504 gateway timeout).
 RETRY_DELAYS = (15.0, 30.0, 60.0, 120.0, 240.0)
+
+
+def _error_message(body: Any) -> str | None:
+    """The error message in an API error body (already unwrapped from {"error": ...} by the SDK)."""
+    if isinstance(body, dict):
+        msg = body.get("message") or body.get("detail")
+        return msg if isinstance(msg, str) and msg.strip() else None
+    if isinstance(body, str):
+        return body.strip() or None
+    return None
 
 
 class SlotThrottle:
@@ -151,8 +161,8 @@ class OpenAIChatClient:
     def _create(self, messages: list[Message], tools: list[dict[str, Any]]) -> Any:
         """Send one request, backing off when the backend rate-limits it or fails transiently.
 
-        A 400 with an empty body is transient on GenAI Studio (same request succeeds later); a 400
-        that explains itself (e.g. context too long) is a real error and is raised."""
+        A 400 with no error message is transient on GenAI Studio (the same request succeeds later); a
+        400 that explains itself (e.g. context too long) is a real error and is raised."""
         for delay in (*RETRY_DELAYS, None):
             if self._throttle:
                 self._throttle.wait()
@@ -170,8 +180,11 @@ class OpenAIChatClient:
             except (RateLimitError, APIResponseValidationError):
                 pass
             except BadRequestError as e:
-                if e.body:
+                if _error_message(e.body):
                     raise
+                print(f"HTTP 400 without a message from {self.backend.name}, body={e.body!r}", file=sys.stderr)
+            except InternalServerError as e:
+                print(f"HTTP {e.status_code} from {self.backend.name}", file=sys.stderr)
             if delay is not None:
                 print(f"rate-limited or transient error from {self.backend.name}; retrying in {delay:.0f}s", file=sys.stderr)
                 time.sleep(delay)

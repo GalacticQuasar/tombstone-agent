@@ -85,6 +85,19 @@ def test_empty_400_is_retried(make_client):
     assert sleeps == [client_mod.RETRY_DELAYS[0]]
 
 
+def test_400_without_message_is_retried(make_client):
+    c, sleeps = make_client([(400, {"error": {"code": 400, "type": "BadRequest"}}), (504, {}), (200, OK)])
+    assert c.complete(USER, []).message.content == "hi"
+    assert sleeps == list(client_mod.RETRY_DELAYS[:2])
+
+
+def test_400_with_message_is_raised(make_client):
+    c, sleeps = make_client([(400, {"error": {"message": "maximum context length is 65536 tokens"}})])
+    with pytest.raises(Exception, match="maximum context length"):
+        c.complete(USER, [])
+    assert sleeps == []
+
+
 def test_other_errors_are_not_retried(make_client):
     c, sleeps = make_client([(400, {"error": "bad"})])
     with pytest.raises(Exception, match="400"):
@@ -101,3 +114,12 @@ def test_throttle_spaces_requests_across_instances(monkeypatch, tmp_path):
     for _ in range(3):
         SlotThrottle("b", 20).wait()
     assert sleeps == pytest.approx([0.0, 3.0, 6.0])
+
+
+def test_error_message_extraction():
+    em = client_mod._error_message
+    assert em({"message": "too long"}) == "too long"
+    assert em({"detail": "bad request"}) == "bad request"
+    assert em({"code": 400}) is None and em({"message": ""}) is None
+    assert em("oops") == "oops" and em("  ") is None
+    assert em(None) is None and em(["x"]) is None
