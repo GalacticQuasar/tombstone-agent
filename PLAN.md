@@ -5,6 +5,10 @@
 
 Greenfield repo (only `IDEA.md`). The deliverable is a research prototype plus experimental results.
 
+**Reframe (2026-11-14): accuracy first, cost second.** The original motivation is that LLMs get distracted by irrelevant context and degrade at long contexts (context rot). The question is now whether an agent that actively prunes its own context **executes tasks more accurately** than other harnesses (no management, truncation, compaction) because it isn't led astray by stale or misleading material. Cost stays a reported constraint (ideal-cache $ and peak context), not the optimization target. Findings below that are framed around cost are unchanged as records. The cost-aware apply rule drops from the main contribution to a secondary item.
+- Evidence so far (suite v2 matrix): self_forget is the most accurate harness (250/252) and the only one with no failing task family. Its lead comes from the others breaking: overflow, output that can't be fetched again, lossy summaries. **Distraction/rot hurting a full context hasn't been shown yet.** Where everything fit, none got 167/168, and Qwen 3.8 27B wasn't distracted by look-alike decoys at ≤55k tokens.
+- Next: tasks where distraction or rot does hurt a full context (harder or more plausible decoys, longer contexts within the window, weaker or second-family models), with predictions fixed before running; then ablations (summary vs bare stub, ledger on/off).
+
 ## Related work (searched 2026-10-29)
 The mechanism is **not novel**. Closest prior work:
 
@@ -35,7 +39,7 @@ The mechanism is **not novel**. Closest prior work:
 | Baselines | (1) full context, no management; (2) naive truncation (stub all but the last K tool results); (3) auto-compact (summarize history at a token threshold) |
 | Tasks | Custom synthetic suite with **fully mocked** tools (local corpus web, fake FS) and known distractor labels |
 | Stack | Python + uv, **open-source models** via one **OpenAI-compatible** client (`base_url` profiles for OpenRouter / Ollama / llama.cpp server / vLLM), hand-rolled loop, no framework |
-| Headline metric | Same accuracy, fewer tokens. Secondary: $ (with cache pricing), cache hit rate, forget precision/recall vs distractor labels, retrieval rate |
+| Headline metric | ~~Same accuracy, fewer tokens~~ → **task accuracy** (reframed 2026-11-14). Secondary: $ (with cache pricing), peak context, forget precision/recall vs distractor labels, retrieval rate |
 
 ## Key design details
 - **Canonical message format.** An internal list of messages and blocks, rendered to OpenAI chat-completions format (`tool_calls` / `role: tool`). Keeping it canonical lets the context store work without a particular wire format and makes rendering easy to unit-test.

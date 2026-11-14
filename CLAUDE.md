@@ -1,9 +1,11 @@
 # Tombstone Agent
 
-Research prototype: an LLM agent that forgets its own tool results, replacing them with
-agent-written tombstones, and can retrieve them later from an archive. The question is
-whether self-directed forgetting cuts token cost at equal accuracy vs. no management,
-truncation and auto-compaction. Origin: `IDEA.md`.
+Research prototype: an LLM agent that prunes its own context, replacing tool results with
+agent-written tombstones it can retrieve later from an archive. LLMs get distracted by irrelevant
+context and degrade at long contexts (context rot); the question is whether self-directed pruning
+makes the agent **execute tasks more accurately** than no management, truncation and
+auto-compaction. Cost is tracked as a secondary constraint, not the target (reframed 2026-11-14,
+see PLAN.md "Context"). Origin: `IDEA.md`.
 
 **`PLAN.md` is the source of truth**: design decisions, model choices, and every
 experiment's findings. Read it before changing behavior, and append new findings there
@@ -61,10 +63,14 @@ report to `results/<name>_report.txt` so the numbers are committed (`results/` h
 ## Status
 Done: core loop, forgetting, baselines, task suite, full Qwen matrix, and its replication on GenAI Studio
 (see PLAN.md; strategy cost differences of ±15% didn't replicate across hosts, so cost claims need more seeds).
-Prior work: the mechanism is already published (PLAN.md "Related work"); frame results as the controlled
-study plus cost-aware apply, not as a new mechanism.
+Prior work: the mechanism is already published (PLAN.md "Related work"); frame results as a controlled
+accuracy benchmark, not as a new mechanism.
 Suite v2 (one task per strategy weakness) + overflow handling built, and its 144-run matrix done (PLAN.md
 "Suite v2 matrix"): self_forget 250/252 phases and the only strategy with no failing task family; none is
 cheapest wherever it can finish.
-Open, in rough priority: the cost-aware apply rule (confirm before starting), Llama second-family run, ablations
-(immediate vs batched apply, ledger on/off, summary vs bare stub).
+Not yet shown: that pruning beats a full context on distraction/rot. Where everything fit, none was 167/168, and
+Qwen 3.8 27B wasn't distracted by look-alike decoys at ≤55k tokens; self_forget's lead comes from other harnesses
+breaking (overflow, unrefetchable output, lossy summaries).
+Open, in rough priority: tasks where distraction/rot actually hurts a full context (harder decoys, longer contexts,
+weaker or second-family models such as Llama), with predictions fixed first; ablations (summary vs bare stub, ledger
+on/off, immediate vs batched apply); the cost-aware apply rule (confirm before starting).
