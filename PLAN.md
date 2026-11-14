@@ -251,6 +251,58 @@ Per-run data: `results/v2-pilot.jsonl`; table: `results/v2-pilot_report.txt`.
 - **Open decision, not applied (it would mean tuning after seeing results):** restating the catalog URL in exact's phases 1–4 (not in the trap) would make compact fail on the targeted phase rather than earlier. The current failure is a legitimate lossy summary, so the task is unchanged.
 - **Next:** multi-seed v2 matrix on GenAI Studio (free): `TASKS="<SUITE_V2>" SEEDS="0 1 2" evals/matrix.sh runs/v2-matrix purdue-qwen3.8-27b 0.7`, 144 runs. horizon dominates the runtime (~50 turns per run), so expect several hours at 18 req/min. Then the cost-aware apply rule (confirm first), measured on horizon.
 
+## Suite v2 matrix (2026-11-13/14) — `runs/v2-matrix`, $0
+Per-run data: `results/v2-matrix.jsonl`; table: `results/v2-matrix_report.txt`.
+`purdue-qwen3.8-27b`, temperature 0.7, `SUITE_V2` (6 task families × 2 variants) × 4 strategies × seeds 0–2 = 144 runs, so each family/strategy cell has 6 runs. `--max-context 60000`. Costs use DeepInfra prices. The host reports no `cached_tokens`, so the ideal (simulated prefix) column is the only cache measure.
+
+**Operations:** 139 runs passed on the first pass (17:12–20:56). 5 crashed on host errors: three 400s and two 504 gateway timeouts, none of them overflow. That led to two client fixes: retry a 400 without an error message, and retry 5xx (`0232c87`). One 400 after the fix had a message in its body, and the client now logs bodies so the next one is visible. The 5 were rerun with the resumable `matrix.sh` and all passed, with no retries needed. Runs started after the fix used the new retry code. This changes error handling only, not the requests.
+
+**Suite totals** (phases correct of 252; $ = sum over the 36 runs per strategy):
+
+| strategy | phases | $ no cache | $ ideal cache | mean peak prompt |
+|---|---|---|---|---|
+| none | 203 (80.6%) | 2.14 | **0.86** | 40.2k |
+| self_forget | **250 (99.2%)** | 2.74 (+28%) | 1.30 (+51%) | 28.7k |
+| truncate | 230 (91.3%) | 3.67 (+71%) | 1.62 (+89%) | 20.0k |
+| compact | 205 (81.3%) | 2.50 (+17%) | 1.85 (+115%) | 17.2k |
+
+Excluding horizon, where none can't finish (168 phases): none 167, self_forget 166, truncate 146, compact 122. Ideal $ vs none: self_forget +23%, truncate +101%, compact +99%. No-cache $: self_forget ±0%.
+
+**Per family** (phases correct, ideal $):
+
+| family | none | self_forget | truncate | compact | prediction → verdict |
+|---|---|---|---|---|---|
+| horizon | **36/84**, 0.22 | 84/84, 0.52 | 84/84, 0.35 | 83/84, 0.59 | none loses → ✅ 6/6 runs overflowed after exactly 6 phases (peak 52.7–57.3k) |
+| rot | 54/54, 0.19 | 54/54, 0.22 | **41/54**, 0.77 | **44/54**, 0.77 | none loses (rot) → ❌ none perfect; truncate/compact lose instead |
+| queue | 36/36, 0.07 | 35/36, 0.08 | **30/36**, 0.09 | **30/36**, 0.09 | truncate loses → ✅ 6/6 trap misses; compact also 6/6 |
+| exact | 35/36, 0.19 | 36/36, 0.21 | 36/36, 0.20 | **12/36**, 0.08 | compact loses → ✅ but before the trap phase |
+| buried | 30/30, 0.14 | 29/30, 0.20 | 27/30, 0.15 | **24/30**, 0.23 | self_forget loses → ❌ on accuracy (1/6 trap misses), ✅ on cost (+44%) |
+| short | 12/12, 0.05 | 12/12, 0.08 | 12/12, 0.06 | 12/12, 0.09 | self_forget costs most → ❌ narrowly: +53% vs none, but compact +68% |
+
+**How each strategy failed** (all 72 failed phases outside horizon/none inspected):
+- **Truncate on rot is a re-read loop, not rot.** Its stubs keep the path but drop the station ID in each file's header, so it can't remember which log holds which station. It averaged 363 re-reads and 92 turns per run, against 18 for none. rot_1 s1 hit the 200-turn limit while still in phase 1, re-reading each log 15–16 times. rot_1 s0 overflowed: one turn read 10 logs in parallel (~17k tokens) and took the request from 43k past 60k before truncate's after-turn clearing could run. So **clearing after each turn doesn't bound the context** when a single turn is large. The other 2 truncate rot misses were wrong rows.
+- **The rot errors aren't the targeted rot.** Of 12 wrong rot answers (truncate 2, compact 10), only 1 is a same-time sibling row (compact: MH3A's row for MH3B). 6 match no row in any log (made up after compaction), and 5 match some row of an unrelated station or time. none read up to 48k of look-alike tables and made no errors. At this size and with IDs in each file header, Qwen 3.8 27B doesn't rot.
+- **queue:** all 12 truncate/compact trap misses re-polled, or remembered the poll, found the deploys queue drained, and declined: "unknown", or asked the user to re-share the data. None guessed a decoy commit. self_forget retrieved the block in 6 of 6 runs. Its one miss (queue_2 s2) had the correct commit `3eed385` in a turn that also called `forget`, then ended the phase with "Ready for the next question" and no `FINAL:` line: housekeeping displaced the answer.
+- **exact:** compact failed identically in 6/6 runs. The first compaction (phase 1–2) dropped the catalog URL, the following prompts say "from the same catalog", and from phase 2 on it asked the user for the URL. It never reached the trap with a usable context. none's one miss is the wrong row on the right page (darwin-arm64 for linux-arm64, at 55k context), the same error as in the pilot. self_forget got 6/6 traps right with only 2 retrievals in total: its forget summaries kept the checksum, or it had not yet forgotten the page.
+- **buried:** self_forget missed once (buried_1 s2): it had forgotten the history page and never retrieved, answering "unknown". In the other 5 runs it retrieved forgotten blocks in bulk until it found the aside (55 retrievals over 6 runs), which is where its +44% cost comes from. Truncate (3 misses) and compact (6/6 misses) said no page mentioned the lifeboat. They can't search for it, and they don't re-fetch every page on a hunch.
+- **horizon:** compact's one miss was `1880, 1` for `1880, 114`, a truncated number. self_forget averaged 6.8 batch applies and 54 turns per run, against truncate's 44.5. That accounts for its 1.5× ideal cost vs truncate.
+
+**Forget precision (self_forget, 1,119 forget requests):** 769 distractor (69%), 303 relevant from finished phases (27%), 23 needed_later (2%), 24 unlabeled. 89 retrievals, most on buried (55) and rot (24).
+
+**Conclusions:**
+1. **self_forget is the only strategy without a systematic failure mode:** 250/252, at most 1 miss per family. Every other strategy fails a whole family: none overflows on horizon, truncate fails queue and loops on rot, compact fails exact, queue and buried. This is the robust result. It has 6 runs per cell, on one host and one model.
+2. **Cost: none is cheapest whenever it can finish.** Excluding horizon, self_forget costs +23% ideal (±0% without caching), and truncate and compact cost about 2× through re-reads and summarizer calls. The extra cost of self_forget is concentrated in horizon (many batch applies) and buried (bulk retrieval).
+3. **Two predictions failed and are reported as such.** Rot didn't appear in none at ≤48k context. Buried hurt self_forget's cost, not its accuracy. Short's predicted overhead is real (+53%) but compact's is larger.
+4. **Truncate's real weakness is information in the content that its stubs don't keep** (station IDs), more than unrefetchable output. Its context limit is also not enforced within a turn.
+5. **Compact's failures are summaries that drop navigational state** (catalog URL, deploy data, the lifeboat aside). Its failure is "can't continue", not "answers wrong".
+
+**Caveats:** one host (GenAI Studio, unknown quantization) and one model. Seeds aren't reproducible on this host. Each cell is 2 task variants × 3 seeds. The rot and exact designs leak information: file headers carry station IDs, and the phases rely on "same catalog". Both are kept as built, per the fixed-predictions rule.
+
+**Next:**
+- The cost-aware apply rule (confirm first), measured on horizon, where self_forget's batch applies cost the most.
+- Ablations: forget summaries vs bare stubs, and ledger on/off, to see whether summaries are what save queue and exact.
+- Optionally, a DeepInfra replication of the v2 suite. That's a paid run: one seed of all 4 strategies (48 runs) is about $2–4 (ideal-cache to no-cache prices from this matrix), so 3 seeds is about $6–11. Confirm before launching.
+
 ## Build phases
 1. **Core loop + one backend.** Canonical types, OpenAI-compatible client, agent loop, mock tools, NoOp strategy, JSONL trace. Confirm the chosen model does reliable tool calls on the backend, and work out which backend usage/timing fields show prefix reuse. Exit: an agent solves a toy task end-to-end.
 2. **Context store + forgetting.** Block IDs, ledger, `forget` / `retrieve_context`, deferred apply, archive, simulated prefix metric. Unit tests for render/apply/retrieve and tool-pair integrity.

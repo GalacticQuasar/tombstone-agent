@@ -1,0 +1,50 @@
+task        backend          strategy      n phases ok turns   prompt   peak reread  $m none  $m real  $m ideal  notes
+----------------------------------------------------------------------------------------------------------------------
+buried_1    purdue-qwen3.8-27b none          3     15/15  16.0   275.7k  38.4k    0.0    48.55    48.55     21.61  
+buried_1    purdue-qwen3.8-27b self_forget   3     14/15  21.3   371.0k  39.0k    0.3    66.91    66.91     32.05  forgot=18.3333 retrieved=11.6667
+buried_1    purdue-qwen3.8-27b truncate      3     14/15  21.0   219.4k  16.2k    4.7    45.60    45.60     26.08  truncations=3.33333
+buried_1    purdue-qwen3.8-27b compact       3     12/15  26.3   283.2k  19.7k   20.0    59.22    59.22     41.24  compactions=3
+buried_2    purdue-qwen3.8-27b none          3     15/15  15.3   310.3k  40.7k    0.0    54.38    54.38     23.77  
+buried_2    purdue-qwen3.8-27b self_forget   3     15/15  25.0   351.7k  29.0k    0.0    65.54    65.54     33.24  forgot=21.3333 retrieved=6.66667
+buried_2    purdue-qwen3.8-27b truncate      3     13/15  16.7   164.8k  14.8k    2.0    39.33    39.33     25.35  truncations=3
+buried_2    purdue-qwen3.8-27b compact       3     12/15  23.3   265.7k  19.3k   12.0    55.39    55.39     36.88  compactions=2.33333
+exact_1     purdue-qwen3.8-27b none          3     17/18  17.0   451.7k  56.1k    0.0    77.37    77.37     32.28  
+exact_1     purdue-qwen3.8-27b self_forget   3     18/18  23.0   349.9k  30.5k    0.7    67.39    67.39     36.47  forgot=35.6667 retrieved=0.333333
+exact_1     purdue-qwen3.8-27b truncate      3     18/18  28.3   353.0k  17.9k   21.0    70.60    70.60     36.70  truncations=5.33333
+exact_1     purdue-qwen3.8-27b compact       3      6/18  11.0    64.0k  11.9k    0.0    16.24    16.24     13.13  compactions=1
+exact_2     purdue-qwen3.8-27b none          3     18/18  17.0   447.3k  55.0k    0.0    74.90    74.90     30.16  
+exact_2     purdue-qwen3.8-27b self_forget   3     18/18  20.0   312.8k  29.4k    0.7    60.17    60.17     32.91  forgot=32 retrieved=0.333333
+exact_2     purdue-qwen3.8-27b truncate      3     18/18  25.3   291.6k  18.8k   11.3    58.26    58.26     31.44  truncations=4.66667
+exact_2     purdue-qwen3.8-27b compact       3      6/18  11.0    64.5k  11.8k    0.0    16.67    16.67     13.54  compactions=1
+horizon_1   purdue-qwen3.8-27b none          3     18/42  21.3   608.5k  55.9k    0.0   101.62   101.62     38.61  overflow=3/3
+horizon_1   purdue-qwen3.8-27b self_forget   3     42/42  58.7  1245.2k  40.6k    1.7   217.54   217.54     93.13  forgot=70 retrieved=0.666667
+horizon_1   purdue-qwen3.8-27b truncate      3     42/42  45.0   622.7k  19.7k    0.7   115.62   115.62     57.81  truncations=14.6667
+horizon_1   purdue-qwen3.8-27b compact       3     42/42  56.7   737.3k  19.3k   30.7   145.92   145.92     97.19  compactions=6.66667
+horizon_2   purdue-qwen3.8-27b none          3     18/42  21.3   575.6k  53.3k    0.0    95.48    95.48     36.04  overflow=3/3
+horizon_2   purdue-qwen3.8-27b self_forget   3     42/42  50.0  1029.7k  39.9k    0.7   181.03   181.03     80.23  forgot=62.3333
+horizon_2   purdue-qwen3.8-27b truncate      3     42/42  44.0   624.1k  19.5k    0.0   115.92   115.92     57.53  truncations=12
+horizon_2   purdue-qwen3.8-27b compact       3     41/42  57.0   735.6k  19.7k   24.0   148.87   148.87     98.85  compactions=6.33333
+queue_1     purdue-qwen3.8-27b none          3     18/18  12.0   140.2k  22.1k    0.0    24.96    24.96     11.81  
+queue_1     purdue-qwen3.8-27b self_forget   3     18/18  13.0   110.2k  15.9k    0.0    21.92    21.92     13.07  forgot=6 retrieved=1
+queue_1     purdue-qwen3.8-27b truncate      3     15/18  13.0   152.0k  19.1k    1.0    26.93    26.93     14.18  truncations=1
+queue_1     purdue-qwen3.8-27b compact       3     15/18  15.0   123.3k  19.2k    1.7    24.70    24.70     15.76  compactions=1
+queue_2     purdue-qwen3.8-27b none          3     18/18  11.0   140.7k  22.4k    0.0    24.52    24.52     11.35  
+queue_2     purdue-qwen3.8-27b self_forget   3     17/18  12.3   108.2k  15.8k    0.0    21.04    21.04     12.36  forgot=5 retrieved=1
+queue_2     purdue-qwen3.8-27b truncate      3     15/18  11.7   144.8k  19.1k    0.3    26.32    26.32     14.38  truncations=1
+queue_2     purdue-qwen3.8-27b compact       3     15/18  13.3   120.1k  19.1k    1.3    23.57    23.57     14.92  compactions=1
+rot_1       purdue-qwen3.8-27b none          3     27/27  17.3   547.4k  48.1k    0.0    88.05    88.05     30.77  
+rot_1       purdue-qwen3.8-27b self_forget   3     27/27  29.0   467.4k  25.9k    2.3    82.31    82.31     36.13  forgot=37.6667 retrieved=4
+rot_1       purdue-qwen3.8-27b truncate      3     16/27 120.0  2603.5k  35.5k  407.0   457.80   457.80    164.91  truncations=103.667 overflow=1/3
+rot_1       purdue-qwen3.8-27b compact       3     22/27  56.7   585.6k  18.9k  165.7   139.67   139.67    117.92  compactions=10.3333
+rot_2       purdue-qwen3.8-27b none          3     27/27  19.0   570.4k  48.4k    0.0    92.72    92.72     32.86  
+rot_2       purdue-qwen3.8-27b self_forget   3     27/27  26.7   482.9k  31.6k    0.0    85.17    85.17     37.19  forgot=27.3333 retrieved=4
+rot_2       purdue-qwen3.8-27b truncate      3     25/27  63.3  1282.3k  31.0k  319.7   233.23   233.23     92.27  truncations=45
+rot_2       purdue-qwen3.8-27b compact       3     22/27  61.0   670.1k  18.4k  228.0   160.41   160.41    138.55  compactions=12
+short_1     purdue-qwen3.8-27b none          3       6/6   8.7    85.1k  20.8k    0.0    16.28    16.28      9.07  
+short_1     purdue-qwen3.8-27b self_forget   3       6/6   9.3    95.1k  23.1k    0.0    19.64    19.64     12.15  forgot=12
+short_1     purdue-qwen3.8-27b truncate      3       6/6   8.7    70.9k  15.8k    0.0    13.76    13.76      8.32  truncations=0.666667
+short_1     purdue-qwen3.8-27b compact       3       6/6  10.7    96.9k  15.1k    6.3    20.44    20.44     14.88  compactions=1
+short_2     purdue-qwen3.8-27b none          3       6/6   8.3    67.6k  21.4k    0.0    13.87    13.87      8.72  
+short_2     purdue-qwen3.8-27b self_forget   3       6/6  11.0   121.4k  23.8k    0.0    25.60    25.60     14.81  
+short_2     purdue-qwen3.8-27b truncate      3       6/6   9.0    76.0k  12.1k    1.0    18.39    18.39     12.43  truncations=1
+short_2     purdue-qwen3.8-27b compact       3       6/6  11.3    94.8k  13.7k    4.3    20.70    20.70     14.86  compactions=1

@@ -21,7 +21,7 @@ uv run python -m evals.report runs/<name>          # per task/strategy table, $ 
 ```
 Each run writes `runs/<dir>/<run-id>/{trace.jsonl,summary.json,archive/}`. `runs/` is git-ignored;
 after an experiment, `uv run python -m evals.export runs/<name> results/<name>.jsonl` and save the
-report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix, purdue-matrix, pilot and v2-pilot).
+report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix, purdue-matrix, pilot, v2-pilot and v2-matrix).
 
 ## Layout
 - `src/tombstone/`: `messages.py` (canonical types → OpenAI format), `client.py` (backend
@@ -63,7 +63,8 @@ Done: core loop, forgetting, baselines, task suite, full Qwen matrix, and its re
 (see PLAN.md; strategy cost differences of ±15% didn't replicate across hosts, so cost claims need more seeds).
 Prior work: the mechanism is already published (PLAN.md "Related work"); frame results as the controlled
 study plus cost-aware apply, not as a new mechanism.
-Suite v2 (one task per strategy weakness) + overflow handling built and piloted, 1 seed (PLAN.md
-"Suite v2 + overflow handling + pilot").
-Open, in rough priority: multi-seed v2 matrix on GenAI Studio, then the cost-aware apply rule (confirm before starting), Llama second-family run, ablations
+Suite v2 (one task per strategy weakness) + overflow handling built, and its 144-run matrix done (PLAN.md
+"Suite v2 matrix"): self_forget 250/252 phases and the only strategy with no failing task family; none is
+cheapest wherever it can finish.
+Open, in rough priority: the cost-aware apply rule (confirm before starting), Llama second-family run, ablations
 (immediate vs batched apply, ledger on/off, summary vs bare stub).
