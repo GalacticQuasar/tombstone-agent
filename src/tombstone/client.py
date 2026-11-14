@@ -181,6 +181,7 @@ class OpenAIChatClient:
                 pass
             except BadRequestError as e:
                 if _error_message(e.body):
+                    print(f"HTTP 400 from {self.backend.name}, not retried, body={e.body!r}", file=sys.stderr)
                     raise
                 print(f"HTTP 400 without a message from {self.backend.name}, body={e.body!r}", file=sys.stderr)
             except InternalServerError as e:
