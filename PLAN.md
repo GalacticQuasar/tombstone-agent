@@ -307,6 +307,47 @@ Excluding horizon, where none can't finish (168 phases): none 167, self_forget 1
 - Ablations: forget summaries vs bare stubs, and ledger on/off, to see whether summaries are what save queue and exact.
 - Optionally, a DeepInfra replication of the v2 suite. That's a paid run: one seed of all 4 strategies (48 runs) is about $2–4 (ideal-cache to no-cache prices from this matrix), so 3 seeds is about $6–11. Confirm before launching.
 
+## Next: distraction suite (planned 2026-11-15, predictions fixed before any run)
+**Why:** under the accuracy framing, the open question is whether a full context actually misleads the model. In suite v2 it didn't: every decoy shared exact words with the question (station IDs, issue numbers), and models find exact matches even in long contexts. Published degradation comes from (a) relevance that has to be inferred rather than string-matched (NoLiMa-style), (b) stale or conflicting information, and (c) plausible irrelevant material during reasoning.
+
+**Two task families, each with an on/off knob that serves as a within-task control:**
+
+| family | design | knob (control → treatment) | length knob |
+|---|---|---|---|
+| `latent` | Each phase names a new town; searching the town returns 6 resident bio pages. The question describes a life fact without naming it ("who had worked on the town's water supply?"), and the answer bio paraphrases it with no shared words ("spent a decade building the reservoir and pumping station"). Each phase also has a lexical decoy, a resident whose bio shares the question's words but not its meaning ("complained about the taste of the water supply"). | **cross-phase decoys** off → on. On: a resident of an *earlier* phase's town has a different paraphrase of the current phase's fact. The question restricts to the current town, so that resident is wrong, but a full context still holds a perfect semantic match | bios of ~25 vs ~50 filler sentences |
+| `stale` | A platform posts change notices each day; each phase says "read today's notices" (search by day) and asks for the current value of one service setting. The asked setting is always last changed today. | **stale versions** 1 → 4. At 4, the same setting was set to other values on 3 earlier days, so a full context holds 3 outdated values for it | notices of short vs long rationale text |
+
+- Rejected: **superseded instructions in user messages.** No strategy prunes user messages (only tool results are ever rewritten), so such a task can't separate the strategies.
+- Both families: 8 phases, sized so that `none` stays under the 60k limit even at the long setting. Overflow must not be the failure mode here.
+
+**Step 1, calibration (`none` only, free on GenAI Studio):** 2 families × knob off/on × short/long = 8 configs, variants 1–2 × seeds 0–1 (32 runs).
+- Premise holds if `none` loses **≥ 10 points of phase accuracy** with the knob on vs off, at either length.
+- If it doesn't, the distraction premise fails for Qwen 3.8 27B at ≤60k context. Record that, and repeat the calibration on a weaker or second-family model before building more tasks.
+- Calibration varies the task, not the strategies, and the thresholds above are fixed now. Fixing a solvability bug is allowed; making the treatment harder until `none` fails is not, unless that's reported as a new configuration.
+
+**Step 2, predictions for the strategy pilot** (only if the premise holds; knob on, setting chosen from step 1):
+
+| family | none | self_forget | truncate | compact |
+|---|---|---|---|---|
+| latent (cross decoys) | loses: picks the earlier-town match | wins: earlier towns' bios were forgotten | wins when the decoy is more than 5 results back, loses otherwise | middle: summaries may carry the decoy resident's fact |
+| stale (4 versions) | loses: picks an outdated value | wins if it forgets superseded notices; ties truncate | wins: old notices cleared | middle: a summary of "current values" helps, unless it records outdated ones |
+
+self_forget is exposed to the misleading material like everyone else on the turn it reads it, so any gain has to come from what it forgets afterwards.
+
+## Distraction calibration (2026-11-15) — `runs/distract-calib`, $0
+Per-run data: `results/distract-calib.jsonl`; table: `results/distract-calib_report.txt`.
+`purdue-qwen3.8-27b`, `none` only, temperature 0.7: 16 configs (`latent`/`stale` × knob off/on × short/long × variants 1–2) × seeds 0–1 = 32 runs. All completed, with no host errors.
+
+| family | knob off, short | knob on, short | knob off, long | knob on, long | drop (on vs off) |
+|---|---|---|---|---|---|
+| latent (cross-phase decoys) | 32/32 | 32/32 | 32/32 | 32/32 | 0 points |
+| stale (4 vs 1 versions) | 32/32 | 32/32 | 32/32 | 32/32 | 0 points |
+
+- **Premise fails (pre-registered threshold: ≥10 points).** Qwen 3.8 27B answered all 256 phases correctly, with or without the treatment, at peak contexts of 13–50k tokens.
+- **The treatment was present.** In latent-on runs, the earlier-town decoy was already in context before its question in 52 of 56 cases, and the agent read 41–48 of 48 bios per run. The stale-v4 runs read 42–43 of the 43 pages carrying asked-setting changes or day indexes (all of them in 7 of 8 runs), so the 3 outdated values were in context for nearly every question. The model saw the misleading material and wasn't misled.
+- **Interpretation:** at ≤50k tokens, a 27B model with explicit scoping in the question ("only people of X count", "today's notices", "current") separates relevant from irrelevant reliably, even when relevance has to be inferred and the decoys are semantic matches. This adds to the suite v2 rot result. On this model and at these lengths, a full context costs money, not accuracy.
+- **Next, per the plan:** repeat the same calibration (same tasks, knobs and threshold) on weaker models. GenAI Studio serves them for free, including `llama3.3:70b` (second family), `qwen3:8b`/`qwen3:14b` (weaker, same family) and `gemma3:27b`. Each needs a tool-calling smoke test first, as in phase 1.
+
 ## Build phases
 1. **Core loop + one backend.** Canonical types, OpenAI-compatible client, agent loop, mock tools, NoOp strategy, JSONL trace. Confirm the chosen model does reliable tool calls on the backend, and work out which backend usage/timing fields show prefix reuse. Exit: an agent solves a toy task end-to-end.
 2. **Context store + forgetting.** Block IDs, ledger, `forget` / `retrieve_context`, deferred apply, archive, simulated prefix metric. Unit tests for render/apply/retrieve and tool-pair integrity.

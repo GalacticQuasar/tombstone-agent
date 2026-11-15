@@ -23,7 +23,7 @@ uv run python -m evals.report runs/<name>          # per task/strategy table, $ 
 ```
 Each run writes `runs/<dir>/<run-id>/{trace.jsonl,summary.json,archive/}`. `runs/` is git-ignored;
 after an experiment, `uv run python -m evals.export runs/<name> results/<name>.jsonl` and save the
-report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix, purdue-matrix, pilot, v2-pilot and v2-matrix).
+report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix, purdue-matrix, pilot, v2-pilot, v2-matrix and distract-calib).
 
 ## Layout
 - `src/tombstone/`: `messages.py` (canonical types → OpenAI format), `client.py` (backend
@@ -71,6 +71,9 @@ cheapest wherever it can finish.
 Not yet shown: that pruning beats a full context on distraction/rot. Where everything fit, none was 167/168, and
 Qwen 3.8 27B wasn't distracted by look-alike decoys at ≤55k tokens; self_forget's lead comes from other harnesses
 breaking (overflow, unrefetchable output, lossy summaries).
-Open, in rough priority: tasks where distraction/rot actually hurts a full context (harder decoys, longer contexts,
+Distraction calibration (latent/stale tasks, PLAN.md "Distraction calibration"): Qwen 3.8 27B none got 256/256
+with decoys or stale values in context, so the premise fails on this model at ≤50k tokens.
+Open, in rough priority: the same calibration on weaker models (free on GenAI Studio: llama3.3:70b, qwen3:8b/14b),
+then tasks where distraction/rot actually hurts a full context (harder decoys, longer contexts,
 weaker or second-family models such as Llama), with predictions fixed first; ablations (summary vs bare stub, ledger
 on/off, immediate vs batched apply); the cost-aware apply rule (confirm before starting).
