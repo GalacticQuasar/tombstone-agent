@@ -75,7 +75,7 @@ def main() -> None:
         groups[(s["task"], s["backend"], s["strategy"])].append((s, run_cost(summary_path.parent / "trace.jsonl")))
 
     order = {"none": 0, "self_forget": 1, "truncate": 2, "compact": 3}
-    header = (f"{'task':11} {'backend':16} {'strategy':12} {'n':>2} {'phases ok':>9} {'turns':>5} "
+    header = (f"{'task':20} {'backend':16} {'strategy':12} {'n':>2} {'phases ok':>9} {'turns':>5} "
               f"{'prompt':>8} {'peak':>6} {'reread':>6} {'$m none':>8} {'$m real':>8} {'$m ideal':>9}  notes")
     print(header)
     print("-" * len(header))
@@ -98,7 +98,7 @@ def main() -> None:
         overflows = sum(s.get("stopped") == "context_overflow" for s, _ in runs)
         if overflows:
             notes.append(f"overflow={overflows}/{n}")
-        print(f"{task:11} {backend:16} {strategy:12} {n:>2} {f'{ok}/{total}':>9} {mean(lambda s, c: s['turns']):5.1f} "
+        print(f"{task:20} {backend:16} {strategy:12} {n:>2} {f'{ok}/{total}':>9} {mean(lambda s, c: s['turns']):5.1f} "
               f"{mean(lambda s, c: c.prompt + c.aux_prompt) / 1000:7.1f}k {mean(lambda s, c: c.peak_prompt) / 1000:5.1f}k "
               f"{mean(lambda s, c: c.rereads):6.1f} {costs[0]} {costs[1]} {costs[2]:>9}  {' '.join(notes)}")
 

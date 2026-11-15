@@ -2,9 +2,11 @@ from .base import Task
 from .chain import chain
 from .dossier import dossier, dossier_task
 from .exact import exact
+from .latent import latent
 from .queue import queue_task
 from .repo import repo
 from .rot import rot
+from .stale import stale
 from .toy import toy_bridge
 
 
@@ -27,6 +29,12 @@ def short(variant: int) -> Task:
 # The original suite, then the redesigned one (PLAN.md "Next: task suite redesign").
 SUITE_V1 = ["dossier_1", "dossier_2", "chain_1", "chain_2", "repo_1", "repo_2"]
 SUITE_V2 = [f"{name}_{v}" for v in (1, 2) for name in ("horizon", "rot", "queue", "exact", "buried", "short")]
+# Distraction calibration (PLAN.md "Next: distraction suite"): each family with its knob off/on, short/long.
+_CALIB_TASKS = [
+    *(latent(v, cross, long) for v in (1, 2) for cross in (False, True) for long in (False, True)),
+    *(stale(v, versions, long) for v in (1, 2) for versions in (1, 4) for long in (False, True)),
+]
+CALIB = [t.id for t in _CALIB_TASKS]
 
 TASKS: dict[str, Task] = {
     t.id: t
@@ -36,5 +44,6 @@ TASKS: dict[str, Task] = {
         chain(1), chain(2),
         repo(1), repo(2),
         *(make(v) for v in (1, 2) for make in (horizon, rot, queue_task, exact, buried, short)),
+        *_CALIB_TASKS,
     ]
 }
