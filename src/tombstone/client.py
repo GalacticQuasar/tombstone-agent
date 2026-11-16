@@ -29,6 +29,8 @@ class Backend:
     tokenizer: str | None = None
     # Requests per minute allowed for this backend, shared by all local processes.
     max_rpm: int | None = None
+    # Backends that share one rate limit (e.g. per-user on one host) share a throttle; default: own name.
+    rate_group: str | None = None
 
 
 BACKENDS: dict[str, Backend] = {
@@ -37,17 +39,29 @@ BACKENDS: dict[str, Backend] = {
     "ollama-glm-flash": Backend("ollama-glm-flash", "http://localhost:11434/v1", "glm-5.3-flash:cloud"),
     # Tool calling works; cached_tokens is always reported as 0.
     "ollama-kimi": Backend("ollama-kimi", "http://localhost:11434/v1", "kimi-k3:cloud"),
-    # Purdue RCAC GenAI Studio (free for Purdue users). Limit is 20 requests/min per user; 18 leaves a margin.
-    # Context is capped at 65,536 tokens and usage has no cached_tokens.
-    "purdue-qwen3.8-27b": Backend(
-        "purdue-qwen3.8-27b",
-        "https://genai.rcac.purdue.edu/api",
-        "qwen3.8:27b",
-        api_key_env="GENAI_API_KEY",
-        tokenizer="Qwen/Qwen3.8-27B",
-        max_rpm=18,
-    ),
 }
+
+
+def _purdue(name: str, model: str, tokenizer: str | None) -> Backend:
+    """Purdue RCAC GenAI Studio (free for Purdue users). The limit is 20 requests/min per user across
+    all models, so every Purdue backend shares one throttle at 18. Usage has no cached_tokens."""
+    return Backend(name, "https://genai.rcac.purdue.edu/api", model, api_key_env="GENAI_API_KEY",
+                   tokenizer=tokenizer, max_rpm=18, rate_group="purdue")
+
+
+BACKENDS.update({
+    b.name: b
+    for b in [
+        # vLLM; context capped at 65,536 tokens.
+        _purdue("purdue-qwen3.8-27b", "qwen3.8:27b", "Qwen/Qwen3.8-27B"),
+        # Weaker / second-family models for the distraction calibration (added 2026-11-15).
+        # The Llama tokenizer repo is gated, so counts are approximate.
+        _purdue("purdue-llama3.3-70b", "llama3.3:70b", None),
+        _purdue("purdue-qwen3-8b", "qwen3:8b", "Qwen/Qwen3-8B"),
+        # Second family with the full context on this host; tokenizer counts are approximate.
+        _purdue("purdue-gpt-oss-120b", "gpt-oss:120b", None),
+    ]
+})
 
 
 def _openrouter(name: str, model: str, provider: str, tokenizer: str | None = None) -> Backend:
@@ -156,13 +170,15 @@ class OpenAIChatClient:
         else:
             api_key = "unused"
         self._client = OpenAI(base_url=backend.base_url, api_key=api_key)
-        self._throttle = SlotThrottle(backend.name, backend.max_rpm) if backend.max_rpm else None
+        self._throttle = SlotThrottle(backend.rate_group or backend.name, backend.max_rpm) if backend.max_rpm else None
 
     def _create(self, messages: list[Message], tools: list[dict[str, Any]]) -> Any:
         """Send one request, backing off when the backend rate-limits it or fails transiently.
 
-        A 400 with no error message is transient on GenAI Studio (the same request succeeds later); a
-        400 that explains itself (e.g. context too long) is a real error and is raised."""
+        A 400 with no error message is transient on GenAI Studio (the same request succeeds later), and
+        so is a 400 whose message reports a server error (its LiteLLM proxy wraps upstream failures such
+        as "InternalServerError ... Unknown role: final" in a 400). Any other 400 that explains itself
+        (e.g. context too long) is a real error and is raised."""
         for delay in (*RETRY_DELAYS, None):
             if self._throttle:
                 self._throttle.wait()
@@ -180,7 +196,8 @@ class OpenAIChatClient:
             except (RateLimitError, APIResponseValidationError):
                 pass
             except BadRequestError as e:
-                if _error_message(e.body):
+                msg = _error_message(e.body)
+                if msg and "InternalServerError" not in msg:
                     print(f"HTTP 400 from {self.backend.name}, not retried, body={e.body!r}", file=sys.stderr)
                     raise
                 print(f"HTTP 400 without a message from {self.backend.name}, body={e.body!r}", file=sys.stderr)

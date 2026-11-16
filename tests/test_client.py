@@ -91,6 +91,13 @@ def test_400_without_message_is_retried(make_client):
     assert sleeps == list(client_mod.RETRY_DELAYS[:2])
 
 
+def test_400_wrapping_a_server_error_is_retried(make_client):
+    body = {"detail": "litellm.InternalServerError: InternalServerError: OpenAIException - Unknown role: final."}
+    c, sleeps = make_client([(400, body), (200, OK)])
+    assert c.complete(USER, []).message.content == "hi"
+    assert sleeps == [client_mod.RETRY_DELAYS[0]]
+
+
 def test_400_with_message_is_raised(make_client):
     c, sleeps = make_client([(400, {"error": {"message": "maximum context length is 65536 tokens"}})])
     with pytest.raises(Exception, match="maximum context length"):
