@@ -24,9 +24,9 @@ def pages(task):
 
 def test_calib_registered_and_deterministic():
     assert len(CALIB) == 16 and all(t in TASKS for t in CALIB)
-    assert latent(1, True, False).prompts == latent(1, True, False).prompts
+    assert latent(1, True, "short").prompts == latent(1, True, "short").prompts
     assert stale(1, 4, True).prompts == stale(1, 4, True).prompts
-    assert latent(1, True, False).prompts != latent(2, True, False).prompts
+    assert latent(1, True, "short").prompts != latent(2, True, "short").prompts
 
 
 def test_latent_answers_share_no_content_words_with_questions():
@@ -36,16 +36,16 @@ def test_latent_answers_share_no_content_words_with_questions():
 
 
 def test_latent_knobs_only_change_the_treatment():
-    base = latent(1, False, False)
-    for cross, long in ((True, False), (False, True), (True, True)):
-        t = latent(1, cross, long)
+    base = latent(1, False, "short")
+    for cross, length in ((True, "short"), (False, "long"), (True, "long"), (True, "tiny")):
+        t = latent(1, cross, length)
         assert t.prompts == base.prompts and [p.expected for p in t.phases] == [p.expected for p in base.phases]
         assert t.labels == base.labels
 
 
 def test_latent_cross_decoys_sit_in_earlier_towns_only_when_on():
     for cross in (False, True):
-        t = latent(1, cross, False)
+        t = latent(1, cross, "tiny")
         texts = pages(t)
         for k, phase in enumerate(t.phases):
             town = re.search(r"people of (\S+), who", phase.prompt).group(1)

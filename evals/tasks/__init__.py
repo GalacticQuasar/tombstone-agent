@@ -31,10 +31,13 @@ SUITE_V1 = ["dossier_1", "dossier_2", "chain_1", "chain_2", "repo_1", "repo_2"]
 SUITE_V2 = [f"{name}_{v}" for v in (1, 2) for name in ("horizon", "rot", "queue", "exact", "buried", "short")]
 # Distraction calibration (PLAN.md "Next: distraction suite"): each family with its knob off/on, short/long.
 _CALIB_TASKS = [
-    *(latent(v, cross, long) for v in (1, 2) for cross in (False, True) for long in (False, True)),
+    *(latent(v, cross, length) for v in (1, 2) for cross in (False, True) for length in ("short", "long")),
     *(stale(v, versions, long) for v in (1, 2) for versions in (1, 4) for long in (False, True)),
 ]
 CALIB = [t.id for t in _CALIB_TASKS]
+# Small-window models (~32k): latent "tiny" plus stale "short".
+_CALIB_SMALL_TASKS = [latent(v, cross, "tiny") for v in (1, 2) for cross in (False, True)]
+CALIB_SMALL = [t.id for t in _CALIB_SMALL_TASKS] + [t for t in CALIB if t.startswith("stale-") and "-short_" in t]
 
 TASKS: dict[str, Task] = {
     t.id: t
@@ -45,5 +48,6 @@ TASKS: dict[str, Task] = {
         repo(1), repo(2),
         *(make(v) for v in (1, 2) for make in (horizon, rot, queue_task, exact, buried, short)),
         *_CALIB_TASKS,
+        *_CALIB_SMALL_TASKS,
     ]
 }

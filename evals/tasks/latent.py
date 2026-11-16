@@ -10,7 +10,8 @@ paraphrase of the current phase's fact. The question restricts to the current to
 that resident is wrong, but a context that still holds the earlier bios has a perfect
 semantic match in it. With cross=False the task is otherwise identical (the control).
 
-Knob `long`: bios of ~42 instead of ~25 filler sentences (same facts and people).
+Knob `length`: bios of ~12 (tiny), ~25 (short) or ~42 (long) filler sentences; same facts and people.
+`tiny` was added 2026-11-15 for models with a ~32k window (qwen3:8b on GenAI Studio).
 """
 
 from __future__ import annotations
@@ -79,7 +80,10 @@ RESIDENTS = 6
 TITLE_FORMS = ("{p} of {t}", "{p} ({t})", "Notes on {p}, {t}", "{p}: a {t} life", "{t} people: {p}", "{p} — {t} archive")
 
 
-def latent(variant: int, cross: bool, long: bool) -> Task:
+LENGTHS = {"tiny": 12, "short": 25, "long": 42}
+
+
+def latent(variant: int, cross: bool, length: str) -> Task:
     rng = random.Random(f"latent-{variant}")
     names = NameGen(rng)
     order = rng.sample(range(len(CONCEPTS)), len(CONCEPTS))
@@ -105,8 +109,8 @@ def latent(variant: int, cross: bool, long: bool) -> Task:
         for k, (j, slot) in cross_slots.items():
             towns[j]["facts"][slot] = ("cross", CONCEPTS[towns[k]["concept"]][2])
 
-    page_rng = random.Random(f"latent-{variant}-pages-{'long' if long else 'short'}")
-    n_sentences = 42 if long else 25
+    page_rng = random.Random(f"latent-{variant}-pages-{length}")
+    n_sentences = LENGTHS[length]
     pages: list[Page] = []
     labels: dict[tuple[str, str], SourceLabel] = {}
     phases: list[Phase] = []
@@ -128,5 +132,5 @@ def latent(variant: int, cross: bool, long: bool) -> Task:
             f"{lead}Among the people of {st.town}, who {desc}? Only people of {st.town} count.",
             "<person>", answer,
         ))
-    knobs = f"{'on' if cross else 'off'}-{'long' if long else 'short'}"
+    knobs = f"{'on' if cross else 'off'}-{length}"
     return Task(id=f"latent-{knobs}_{variant}", phases=phases, make_tools=lambda: MockWeb(pages).tools(), labels=labels)
