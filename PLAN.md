@@ -348,6 +348,36 @@ Per-run data: `results/distract-calib.jsonl`; table: `results/distract-calib_rep
 - **Interpretation:** at ≤50k tokens, a 27B model with explicit scoping in the question ("only people of X count", "today's notices", "current") separates relevant from irrelevant reliably, even when relevance has to be inferred and the decoys are semantic matches. This adds to the suite v2 rot result. On this model and at these lengths, a full context costs money, not accuracy.
 - **Next, per the plan:** repeat the same calibration (same tasks, knobs and threshold) on weaker models. GenAI Studio serves them for free, including `llama3.3:70b` (second family), `qwen3:8b`/`qwen3:14b` (weaker, same family) and `gemma3:27b`. Each needs a tool-calling smoke test first, as in phase 1.
 
+## Model screening + gpt-oss calibration (2026-11-15) — `runs/distract-calib-gptoss`, $0
+Per-run data: `results/distract-calib-gptoss.jsonl`; table: `results/distract-calib-gptoss_report.txt`.
+
+**Screening weaker or second-family models on GenAI Studio.** Each model got a long-prompt probe (a code at the start of a 6–55k-token prompt, comparing the host's `prompt_tokens` with our count) and, where context was enough, one real task as a tool-calling smoke test:
+
+| model | effective context on the host | tool calling | usable |
+|---|---|---|---|
+| `llama3.3:70b` | **~4k**: a 30.9k prompt arrived as 4,098 tokens; `options.num_ctx`, `num_ctx` and `max_context_length` were all ignored | — | no |
+| `qwen3:8b` | ~32k: a 30k prompt was intact, 40k and 55k were cut to 16,386 | **fails**: called `FINAL` as a tool 63×, repeated one search 73×, 0/8 | no |
+| `qwen3:14b`, `gemma3:27b` | ~8k | — | no |
+| `qwen2.5:72b`, `llama3.1:70b-instruct-q4_K_M` | ~4k | — | no |
+| `llama4:latest` | HTTP 400 | — | no |
+| **`gpt-oss:120b`** | ≥55k (56.0k sent, 57.8k counted by the host) | works (2 errors in 63 calls on a smoke run, 7/8) | **yes** |
+
+- Most GenAI Studio models are Ollama-served with a small default `num_ctx` and **truncate silently**: no error, just a model that can't see the start of the prompt. Any new backend needs the long-prompt probe before use.
+- No model on the host is both weaker than Qwen 3.8 27B and usable. A weaker model means a paid backend: OpenRouter `or-llama3.3-70b`, already profiled.
+- Client: all GenAI Studio backends now share one throttle (`rate_group="purdue"`), because the 20 requests/min limit is per user across models. The new 400 logging identified the remaining "400 with a message": the host's LiteLLM proxy wraps upstream failures as `400 {"detail": "litellm.InternalServerError: ... Unknown role: final"}`. Those are now retried.
+- The `latent` "tiny" length (12-sentence bios, ~14k tokens of pages) was added for ~32k-window models. It's unused, because qwen3:8b failed tool calling.
+
+**gpt-oss:120b calibration:** `none` only, the same 16 configs × seeds 0–1, 32 runs. One run crashed on the wrapped 500 above and passed on rerun after the client fix.
+
+| family | knob off, short | knob on, short | knob off, long | knob on, long | drop |
+|---|---|---|---|---|---|
+| latent | 32/32 | 32/32 | 32/32 | 32/32 | 0 points |
+| stale | 32/32 | 32/32 | 31/32 | 32/32 | −1.6 points (the miss was in the control) |
+
+- **The premise fails on a second family too:** 255/256 phases. The only miss (stale-v1-long_2 s0, `510` for `1760`) had no stale versions in context.
+- gpt-oss reads more selectively than Qwen (peaks of 11–44k; 54–77 turns per run). The earlier-town decoy was in context before its question in 33 of 56 cases, and it was never chosen.
+- **Combined conclusion:** at ≤50k tokens, with explicit scoping in each question, neither Qwen 3.8 27B nor gpt-oss-120b is misled by inferred-relevance decoys or stale values. The hypothesis that pruning improves accuracy by avoiding distraction gets no support from strong models at these lengths. What remains to test is a weaker model (paid; Llama 3.3 70B about $1.50–2.50 for the 32 runs, price to be checked before launch), longer contexts (needs a host with a bigger window than 65k), or less explicit scoping in the questions (a new configuration, to be pre-registered).
+
 ## Build phases
 1. **Core loop + one backend.** Canonical types, OpenAI-compatible client, agent loop, mock tools, NoOp strategy, JSONL trace. Confirm the chosen model does reliable tool calls on the backend, and work out which backend usage/timing fields show prefix reuse. Exit: an agent solves a toy task end-to-end.
 2. **Context store + forgetting.** Block IDs, ledger, `forget` / `retrieve_context`, deferred apply, archive, simulated prefix metric. Unit tests for render/apply/retrieve and tool-pair integrity.

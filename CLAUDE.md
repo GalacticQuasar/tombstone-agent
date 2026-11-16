@@ -23,7 +23,7 @@ uv run python -m evals.report runs/<name>          # per task/strategy table, $ 
 ```
 Each run writes `runs/<dir>/<run-id>/{trace.jsonl,summary.json,archive/}`. `runs/` is git-ignored;
 after an experiment, `uv run python -m evals.export runs/<name> results/<name>.jsonl` and save the
-report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix, purdue-matrix, pilot, v2-pilot, v2-matrix and distract-calib).
+report to `results/<name>_report.txt` so the numbers are committed (`results/` has matrix, purdue-matrix, pilot, v2-pilot, v2-matrix, distract-calib and distract-calib-gptoss).
 
 ## Layout
 - `src/tombstone/`: `messages.py` (canonical types → OpenAI format), `client.py` (backend
@@ -50,6 +50,9 @@ report to `results/<name>_report.txt` so the numbers are committed (`results/` h
   is the CLI default for cheap local iteration. Free: `purdue-qwen3.8-27b` (Purdue RCAC GenAI Studio,
   same model name, unknown quantization; throttled to 18 req/min across processes; 65,536-token
   context; no `cached_tokens`; seeds not reproducible). Don't mix its runs with DeepInfra runs in one comparison.
+  Other GenAI Studio models mostly truncate prompts silently (Ollama num_ctx: llama3.3:70b ~4k, qwen3:14b ~8k);
+  only `purdue-gpt-oss-120b` has full context and working tool calls. Probe any new backend with a long prompt
+  (code at the start, compare host prompt_tokens) before using it. All Purdue backends share one throttle.
 - `OPENROUTER_API_KEY` and `GENAI_API_KEY` live in git-ignored `.env`. Never print or commit them.
 - Paid runs cost real money: say roughly what a batch will cost before launching it.
 
@@ -72,8 +75,9 @@ Not yet shown: that pruning beats a full context on distraction/rot. Where every
 Qwen 3.8 27B wasn't distracted by look-alike decoys at ≤55k tokens; self_forget's lead comes from other harnesses
 breaking (overflow, unrefetchable output, lossy summaries).
 Distraction calibration (latent/stale tasks, PLAN.md "Distraction calibration"): Qwen 3.8 27B none got 256/256
-with decoys or stale values in context, so the premise fails on this model at ≤50k tokens.
-Open, in rough priority: the same calibration on weaker models (free on GenAI Studio: llama3.3:70b, qwen3:8b/14b),
+with decoys or stale values in context, and gpt-oss-120b got 255/256: the premise fails on two families at ≤50k.
+No weaker model on GenAI Studio is usable (truncation or broken tool calls).
+Open, in rough priority: decide whether to test a weaker model (paid, or-llama3.3-70b) or less explicit scoping,
 then tasks where distraction/rot actually hurts a full context (harder decoys, longer contexts,
 weaker or second-family models such as Llama), with predictions fixed first; ablations (summary vs bare stub, ledger
 on/off, immediate vs batched apply); the cost-aware apply rule (confirm before starting).
