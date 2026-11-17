@@ -77,6 +77,8 @@ breaking (overflow, unrefetchable output, lossy summaries).
 Distraction calibration (latent/stale tasks, PLAN.md "Distraction calibration"): Qwen 3.8 27B none got 256/256
 with decoys or stale values in context, and gpt-oss-120b got 255/256: the premise fails on two families at ≤50k.
 Implicit scoping (no "only X counts"/"current") changed nothing: Qwen 256/256 (PLAN.md "Implicit-scoping calibration").
+Process analysis of those traces: no confusion signal; the decoy is never named, and Qwen spends extra output
+listing stale-value histories but resolves them correctly (PLAN.md "Process analysis of the calibration traces").
 No weaker model on GenAI Studio is usable (truncation or broken tool calls).
 Open, in rough priority: decide whether to test a weaker model (paid, or-llama3.3-70b) or contexts >65k (paid),
 then tasks where distraction/rot actually hurts a full context (harder decoys, longer contexts,

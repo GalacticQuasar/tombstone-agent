@@ -419,6 +419,22 @@ Per-run data: `results/distract-implicit.jsonl`; table: `results/distract-implic
 - **Remaining tests of the premise are all paid or need a new host:** a weaker model with full context (OpenRouter `or-llama3.3-70b`, about $1.50–2.50 per 32-run calibration), or contexts beyond 65k (DeepInfra Qwen supports more; `--max-context` would have to rise, and total prompt tokens grow faster than linearly with context length, since every turn resends the whole context).
 - A free alternative is to change what's measured rather than the model: distraction may show up in the **process** (extra turns, re-checks, hedged answers) before it shows up in accuracy. That can be read from the existing traces (e.g. turns and tokens, on vs off) at no cost.
 
+## Process analysis of the calibration traces (2026-11-16), $0
+Two Sonnet subagents analyzed the 96 `none` runs from the three calibrations (scripts and reports in the session scratchpad; not committed). On and off runs were paired by calibration, length, wording, variant and seed: 168 phase pairs per family (phases 1–7), with exact sign tests. Phases within a run aren't independent and about 60 metrics were tested, so nominal p-values are optimistic. The traces hold only visible replies: Qwen's thinking and gpt-oss's reasoning aren't logged, and gpt-oss's replies are mostly a bare `FINAL:` line, so text probes say little about gpt-oss.
+
+**latent (cross-phase decoy):**
+- **The decoy resident is never named:** 0/168 phases with the decoy, in any assistant text (independently re-checked; the expected answer's name appears in 167/168, so the name match works). There's no sign the model considered and rejected the decoy in its visible text.
+- Turns, fetches, re-fetches, completion tokens, hedging words, and mentions of the lexical decoy are flat pooled. Scattered nominal p<0.05 results flip direction between explicit and implicit wording, consistent with chance.
+- One lead, not a finding: under implicit wording only, Qwen took +0.38 turns and +0.38 searches per phase with the decoy present (n=56 phase pairs). There was no such effect under explicit wording.
+
+**stale (outdated values):**
+- **Qwen visibly works through the history:** with outdated values in context, its final answer lists the setting's change history ("Day 1: 28 → 22 – Day 3: 22 → 23 – … FINAL: 48") in 111/112 answers, averaging about 4 arrows. In the control it quotes only that day's single change (0.9 arrows on average, never 2 or more; independently re-checked). The subagent's report attributed this to habit by counting any arrow; that conclusion is corrected here.
+- That costs output: +88 completion tokens per phase with explicit wording (n.s.) and +230 with implicit wording (p<0.001). The history was always resolved correctly (accuracy at ceiling).
+- Fetches, re-fetches and earlier-day fetches are unchanged, so the model doesn't re-read to double-check.
+- gpt-oss shows no consistent difference (it mentions an outdated value in 4% of answers).
+
+**Conclusion:** strong models aren't confused by the distractors at these lengths. The only process effect is that Qwen spends extra output reconciling stale values explicitly, which is a cost signal, not an accuracy one. This fits suite v2: on strong models a full context costs tokens, not correctness. A pruning agent would avoid the reconciliation work, but nothing here shows it would answer more accurately.
+
 ## Build phases
 1. **Core loop + one backend.** Canonical types, OpenAI-compatible client, agent loop, mock tools, NoOp strategy, JSONL trace. Confirm the chosen model does reliable tool calls on the backend, and work out which backend usage/timing fields show prefix reuse. Exit: an agent solves a toy task end-to-end.
 2. **Context store + forgetting.** Block IDs, ledger, `forget` / `retrieve_context`, deferred apply, archive, simulated prefix metric. Unit tests for render/apply/retrieve and tool-pair integrity.
