@@ -57,7 +57,8 @@ def _value(rng: random.Random, key: str, avoid: set[int]) -> int:
     return v
 
 
-def stale(variant: int, versions: int, long: bool) -> Task:
+def stale(variant: int, versions: int, long: bool, scope: str = "explicit") -> Task:
+    """`scope`: "explicit" asks for the current value after all changes; "implicit" just asks for the value."""
     assert 1 <= versions <= 4
     rng = random.Random(f"stale-{variant}")
     names = NameGen(rng)
@@ -127,17 +128,22 @@ def stale(variant: int, versions: int, long: bool) -> Task:
     phases: list[Phase] = []
     for k, (service, key) in enumerate(asked):
         d = phase_day[k]
-        if k == 0:
-            idx = ", ".join(INDEX.format(d=i) for i in range(1, CATCHUP_DAYS + 1))
-            lead = (f"You are joining the platform team on day {d}. Catch up by reading every change notice from "
-                    f"days 1-{d} (index pages: {idx}; use web_fetch). ")
+        idx = ", ".join(INDEX.format(d=i) for i in range(1, CATCHUP_DAYS + 1))
+        if scope == "explicit":
+            if k == 0:
+                lead = (f"You are joining the platform team on day {d}. Catch up by reading every change notice from "
+                        f"days 1-{d} (index pages: {idx}; use web_fetch). ")
+            else:
+                lead = f"Day {d}: read today's change notices (index: {INDEX.format(d=d)}). "
+            prompt = f"{lead}What is the current {key} of {service}, after all changes so far?"
         else:
-            lead = f"Day {d}: read today's change notices (index: {INDEX.format(d=d)}). "
-        phases.append(final_phase(
-            f"{lead}What is the current {key} of {service}, after all changes so far?",
-            "<value>", str(chains[k][4]),
-        ))
-    knobs = f"v{versions}-{'long' if long else 'short'}"
+            if k == 0:
+                lead = f"You are joining the platform team on day {d}. Change notices from days 1-{d}: {idx} (use web_fetch). "
+            else:
+                lead = f"Day {d} notices: {INDEX.format(d=d)}. "
+            prompt = f"{lead}What's the {key} of {service}?"
+        phases.append(final_phase(prompt, "<value>", str(chains[k][4])))
+    knobs = f"v{versions}-{'long' if long else 'short'}" + ("" if scope == "explicit" else f"-{scope}")
 
     def tools():
         return [t for t in MockWeb(pages).tools() if t.name == "web_fetch"]

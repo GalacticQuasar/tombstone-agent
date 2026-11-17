@@ -83,7 +83,8 @@ TITLE_FORMS = ("{p} of {t}", "{p} ({t})", "Notes on {p}, {t}", "{p}: a {t} life"
 LENGTHS = {"tiny": 12, "short": 25, "long": 42}
 
 
-def latent(variant: int, cross: bool, length: str) -> Task:
+def latent(variant: int, cross: bool, length: str, scope: str = "explicit") -> Task:
+    """`scope`: "explicit" states the town restriction (twice); "implicit" only says to look into the town."""
     rng = random.Random(f"latent-{variant}")
     names = NameGen(rng)
     order = rng.sample(range(len(CONCEPTS)), len(CONCEPTS))
@@ -127,10 +128,12 @@ def latent(variant: int, cross: bool, length: str) -> Task:
             if kind == "answer":
                 answer = person
         desc = CONCEPTS[town["concept"]][0]
-        lead = "Use the web tools (search by town name). " if k == 0 else "Next: "
-        phases.append(final_phase(
-            f"{lead}Among the people of {st.town}, who {desc}? Only people of {st.town} count.",
-            "<person>", answer,
-        ))
-    knobs = f"{'on' if cross else 'off'}-{length}"
+        if scope == "explicit":
+            lead = "Use the web tools (search by town name). " if k == 0 else "Next: "
+            prompt = f"{lead}Among the people of {st.town}, who {desc}? Only people of {st.town} count."
+        else:
+            lead = "Use the web tools (search by town name). Look" if k == 0 else "Next, look"
+            prompt = f"{lead} into {st.town}. Who {desc}?"
+        phases.append(final_phase(prompt, "<person>", answer))
+    knobs = f"{'on' if cross else 'off'}-{length}" + ("" if scope == "explicit" else f"-{scope}")
     return Task(id=f"latent-{knobs}_{variant}", phases=phases, make_tools=lambda: MockWeb(pages).tools(), labels=labels)

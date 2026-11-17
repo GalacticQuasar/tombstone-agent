@@ -85,3 +85,15 @@ def test_stale_versions_put_outdated_values_in_earlier_notices():
                     changes.append((int(m.group(1)), new))
             assert max(changes)[0] == day and [n for d, n in changes if d == day] == [phase.expected[0]]
             assert len(changes) == versions and all(n != phase.expected[0] for d, n in changes if d < day)
+
+
+def test_implicit_scope_changes_only_the_wording():
+    for explicit, implicit in ((latent(1, True, "short"), latent(1, True, "short", "implicit")),
+                               (stale(1, 4, False), stale(1, 4, False, "implicit"))):
+        assert implicit.id.endswith("-implicit_1") and implicit.id != explicit.id
+        assert implicit.labels == explicit.labels
+        assert [p.expected for p in implicit.phases] == [p.expected for p in explicit.phases]
+        assert pages(implicit) == pages(explicit)
+        for p in implicit.prompts:
+            assert "Only people" not in p and "Among the people" not in p
+            assert "current" not in p and "after all changes" not in p and "today's" not in p

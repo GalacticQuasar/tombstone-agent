@@ -35,6 +35,12 @@ _CALIB_TASKS = [
     *(stale(v, versions, long) for v in (1, 2) for versions in (1, 4) for long in (False, True)),
 ]
 CALIB = [t.id for t in _CALIB_TASKS]
+# Implicit scoping (PLAN.md "Next: implicit-scoping calibration"): same cells, questions without explicit scope.
+_CALIB_IMPLICIT_TASKS = [
+    *(latent(v, cross, length, "implicit") for v in (1, 2) for cross in (False, True) for length in ("short", "long")),
+    *(stale(v, versions, long, "implicit") for v in (1, 2) for versions in (1, 4) for long in (False, True)),
+]
+CALIB_IMPLICIT = [t.id for t in _CALIB_IMPLICIT_TASKS]
 # Small-window models (~32k): latent "tiny" plus stale "short".
 _CALIB_SMALL_TASKS = [latent(v, cross, "tiny") for v in (1, 2) for cross in (False, True)]
 CALIB_SMALL = [t.id for t in _CALIB_SMALL_TASKS] + [t for t in CALIB if t.startswith("stale-") and "-short_" in t]
@@ -49,5 +55,6 @@ TASKS: dict[str, Task] = {
         *(make(v) for v in (1, 2) for make in (horizon, rot, queue_task, exact, buried, short)),
         *_CALIB_TASKS,
         *_CALIB_SMALL_TASKS,
+        *_CALIB_IMPLICIT_TASKS,
     ]
 }
