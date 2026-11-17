@@ -1,0 +1,18 @@
+task                 backend          strategy      n phases ok turns   prompt   peak reread  $m none  $m real  $m ideal  notes
+-------------------------------------------------------------------------------------------------------------------------------
+latent-off-long-implicit_1 purdue-qwen3.8-27b none          2     16/16  26.0   575.0k  47.8k    0.0    92.23    92.23     31.75  
+latent-off-long-implicit_2 purdue-qwen3.8-27b none          2     16/16  26.5   598.6k  46.9k    0.0    95.77    95.77     32.45  
+latent-off-short-implicit_1 purdue-qwen3.8-27b none          2     16/16  26.5   423.2k  33.9k    0.0    70.41    70.41     25.15  
+latent-off-short-implicit_2 purdue-qwen3.8-27b none          2     16/16  25.0   372.0k  32.1k    0.0    61.62    61.62     22.25  
+latent-on-long-implicit_1 purdue-qwen3.8-27b none          2     16/16  30.0   730.2k  51.5k    0.0   116.99   116.99     38.96  
+latent-on-long-implicit_2 purdue-qwen3.8-27b none          2     16/16  25.0   588.9k  50.5k    0.0    94.45    94.45     32.61  
+latent-on-short-implicit_1 purdue-qwen3.8-27b none          2     16/16  31.0   511.4k  34.4k    0.0    83.73    83.73     28.18  
+latent-on-short-implicit_2 purdue-qwen3.8-27b none          2     16/16  28.5   452.7k  31.4k    0.0    73.80    73.80     24.99  
+stale-v1-long-implicit_1 purdue-qwen3.8-27b none          2     16/16  24.0   450.1k  32.5k    0.0    74.82    74.82     26.57  
+stale-v1-long-implicit_2 purdue-qwen3.8-27b none          2     16/16  24.0   410.9k  38.2k    5.5    68.88    68.88     25.86  
+stale-v1-short-implicit_1 purdue-qwen3.8-27b none          2     16/16  24.0   167.4k  11.6k    0.0    32.24    32.24     13.45  
+stale-v1-short-implicit_2 purdue-qwen3.8-27b none          2     16/16  24.0   148.7k  11.8k    0.0    29.01    29.01     12.51  
+stale-v4-long-implicit_1 purdue-qwen3.8-27b none          2     16/16  26.0   512.5k  33.6k    0.0    88.57    88.57     33.28  
+stale-v4-long-implicit_2 purdue-qwen3.8-27b none          2     16/16  24.5   448.6k  35.9k    0.0    78.18    78.18     30.54  
+stale-v4-short-implicit_1 purdue-qwen3.8-27b none          2     16/16  25.5   193.0k  12.8k    0.0    38.46    38.46     16.81  
+stale-v4-short-implicit_2 purdue-qwen3.8-27b none          2     16/16  24.0   157.3k  13.1k    0.0    32.71    32.71     15.41  

@@ -378,6 +378,47 @@ Per-run data: `results/distract-calib-gptoss.jsonl`; table: `results/distract-ca
 - gpt-oss reads more selectively than Qwen (peaks of 11–44k; 54–77 turns per run). The earlier-town decoy was in context before its question in 33 of 56 cases, and it was never chosen.
 - **Combined conclusion:** at ≤50k tokens, with explicit scoping in each question, neither Qwen 3.8 27B nor gpt-oss-120b is misled by inferred-relevance decoys or stale values. The hypothesis that pruning improves accuracy by avoiding distraction gets no support from strong models at these lengths. What remains to test is a weaker model (paid; Llama 3.3 70B about $1.50–2.50 for the 32 runs, price to be checked before launch), longer contexts (needs a host with a bigger window than 65k), or less explicit scoping in the questions (a new configuration, to be pre-registered).
 
+## Next: implicit-scoping calibration (planned 2026-11-16, fixed before any run)
+**Why:** in both calibrations every question stated its scope explicitly, often twice ("Among the people of X, … Only people of X count"; "the current value, after all changes so far"). Real tasks usually leave the scope implied by the flow of work. A full context should mislead most when the model has to infer which material the question is about.
+
+**Knob `scope`: explicit (as before) → implicit.** It changes only the prompt wording; pages, answers and labels are identical.
+- latent, explicit: "Among the people of {town}, who {fact}? Only people of {town} count."
+- latent, implicit: "Next, look into {town}. Who {fact}?" The scope is implied by the instruction to look into the town. The earlier-town match is still graded wrong.
+- stale, explicit: "Day {d}: read today's change notices (index: …). What is the current {key} of {service}, after all changes so far?"
+- stale, implicit: "Day {d} notices: {index}. What's the {key} of {service}?" ("current", "after all changes so far" and "today's" are dropped.)
+
+**Caveat, written down now:** the implicit latent question is literally satisfiable by the earlier-town resident. An answer naming them can be read as a defensible interpretation rather than distraction. So the comparison that counts is **on-implicit vs off-implicit**: in the off setting no such resident exists, so the wording alone can't explain a drop. Each wrong answer will also be classified (decoy pick / other).
+
+**Calibration:** `purdue-qwen3.8-27b` (primary model), `none` only, implicit wording, the same 8 knob/length cells × variants 1–2 × seeds 0–1 = 32 runs.
+- Threshold unchanged: **≥ 10 points** drop, on vs off, at either length, in either family.
+- If met: replicate on `purdue-gpt-oss-120b`, then pilot all 4 strategies with the predictions from "Next: distraction suite".
+- If not met: record it. The remaining options are paid (a weaker model, or contexts beyond 65k).
+
+## Implicit-scoping calibration (2026-11-16) — `runs/distract-implicit`, $0
+Per-run data: `results/distract-implicit.jsonl`; table: `results/distract-implicit_report.txt`.
+`purdue-qwen3.8-27b`, `none` only, implicit wording, 8 cells × variants 1–2 × seeds 0–1 = 32 runs, all completed with no host errors.
+
+| family | knob off, short | knob on, short | knob off, long | knob on, long | drop |
+|---|---|---|---|---|---|
+| latent (implicit) | 32/32 | 32/32 | 32/32 | 32/32 | 0 points |
+| stale (implicit) | 32/32 | 32/32 | 32/32 | 32/32 | 0 points |
+
+- **Threshold not met: 256/256, no misses at all.** So the miss classification planned for the latent caveat (decoy pick vs other) had nothing to classify.
+- **The treatment was present:** the earlier-town match was in context before its question in 55 of 56 cases (41–48 of 48 bios read per run). The stale-v4 runs read 42–43 of the 43 pages carrying asked-setting changes or day indexes.
+- Dropping the explicit scope ("only people of X count", "current, after all changes so far", "today's") changed nothing. Given "look into X. Who …?", Qwen answered from X every time, never naming the matching resident of an earlier town, though that resident was still in context.
+
+**Where the distraction premise stands after three calibrations (none only, 96 runs, 767/768 phases):**
+
+| calibration | model | wording | phases | drop on vs off |
+|---|---|---|---|---|
+| distract-calib | Qwen 3.8 27B | explicit | 256/256 | 0 |
+| distract-calib-gptoss | gpt-oss-120b | explicit | 255/256 | 0 (the miss was a control) |
+| distract-implicit | Qwen 3.8 27B | implicit | 256/256 | 0 |
+
+- For strong models at ≤50k tokens, semantic decoys and stale values in context don't measurably cost accuracy, with or without explicit scoping. The accuracy case for self-pruning rests, so far, on the harness failures from suite v2 (overflow, unrefetchable output, lossy summaries), not on distraction.
+- **Remaining tests of the premise are all paid or need a new host:** a weaker model with full context (OpenRouter `or-llama3.3-70b`, about $1.50–2.50 per 32-run calibration), or contexts beyond 65k (DeepInfra Qwen supports more; `--max-context` would have to rise, and total prompt tokens grow faster than linearly with context length, since every turn resends the whole context).
+- A free alternative is to change what's measured rather than the model: distraction may show up in the **process** (extra turns, re-checks, hedged answers) before it shows up in accuracy. That can be read from the existing traces (e.g. turns and tokens, on vs off) at no cost.
+
 ## Build phases
 1. **Core loop + one backend.** Canonical types, OpenAI-compatible client, agent loop, mock tools, NoOp strategy, JSONL trace. Confirm the chosen model does reliable tool calls on the backend, and work out which backend usage/timing fields show prefix reuse. Exit: an agent solves a toy task end-to-end.
 2. **Context store + forgetting.** Block IDs, ledger, `forget` / `retrieve_context`, deferred apply, archive, simulated prefix metric. Unit tests for render/apply/retrieve and tool-pair integrity.
