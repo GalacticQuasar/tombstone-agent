@@ -420,7 +420,7 @@ Per-run data: `results/distract-implicit.jsonl`; table: `results/distract-implic
 - A free alternative is to change what's measured rather than the model: distraction may show up in the **process** (extra turns, re-checks, hedged answers) before it shows up in accuracy. That can be read from the existing traces (e.g. turns and tokens, on vs off) at no cost.
 
 ## Process analysis of the calibration traces (2026-11-16), $0
-Two Sonnet subagents analyzed the 96 `none` runs from the three calibrations (scripts and reports in the session scratchpad; not committed). On and off runs were paired by calibration, length, wording, variant and seed: 168 phase pairs per family (phases 1–7), with exact sign tests. Phases within a run aren't independent and about 60 metrics were tested, so nominal p-values are optimistic. The traces hold only visible replies: Qwen's thinking and gpt-oss's reasoning aren't logged, and gpt-oss's replies are mostly a bare `FINAL:` line, so text probes say little about gpt-oss.
+Two Sonnet subagents analyzed the 96 `none` runs from the three calibrations (scripts: `evals/analysis/`, reports: `results/process/`; the scripts read the git-ignored `runs/`). On and off runs were paired by calibration, length, wording, variant and seed: 168 phase pairs per family (phases 1–7), with exact sign tests. Phases within a run aren't independent and about 60 metrics were tested, so nominal p-values are optimistic. The traces hold only visible replies: Qwen's thinking and gpt-oss's reasoning aren't logged, and gpt-oss's replies are mostly a bare `FINAL:` line, so text probes say little about gpt-oss.
 
 **latent (cross-phase decoy):**
 - **The decoy resident is never named:** 0/168 phases with the decoy, in any assistant text (independently re-checked; the expected answer's name appears in 167/168, so the name match works). There's no sign the model considered and rejected the decoy in its visible text.
@@ -434,6 +434,33 @@ Two Sonnet subagents analyzed the 96 `none` runs from the three calibrations (sc
 - gpt-oss shows no consistent difference (it mentions an outdated value in 4% of answers).
 
 **Conclusion:** strong models aren't confused by the distractors at these lengths. The only process effect is that Qwen spends extra output reconciling stale values explicitly, which is a cost signal, not an accuracy one. This fits suite v2: on strong models a full context costs tokens, not correctness. A pruning agent would avoid the reconciliation work, but nothing here shows it would answer more accurately.
+
+## Next: long-context test on Modal (proposed 2026-11-17, recorded 2026-11-24; not started)
+**Status: proposed in conversation, awaiting the user's go-ahead. Nothing is built or deployed, and predictions are not yet fixed.**
+
+**Why:** the distraction nulls cover contexts ≤50k tokens and single-fact lookups on clean pages. They say nothing about 100k+ contexts, or about questions that reason across many facts, which is where published long-context losses are expected to be larger. GenAI Studio's 65,536-token window blocks that test.
+
+**Compute:** the user has about $400 of Modal credits (by their account, expiring February 2027) to use instead of paying OpenRouter. Modal rents GPUs by the second; vLLM serves an OpenAI-compatible endpoint, so the harness needs one more backend profile.
+- **Model:** bf16 `Qwen/Qwen3.8-27B`, the same precision as the DeepInfra runs. Still a different host: don't mix its runs with DeepInfra or GenAI Studio runs in one comparison.
+- **Window:** 262,144 tokens natively (`max_position_embeddings` in the HF config).
+- **Memory (estimates, unmeasured):** weights about 54 GB. 16 of 64 layers use full attention (4 KV heads, head_dim 256), so about 64 KB of KV cache per token at bf16: ~8 GB at 128k, ~10 GB at 150k, ~16 GB at 262k. The other 48 layers should keep a fixed-size state.
+- **Expected benefits, to verify:** no request throttle, real prefix-cache counts to check the simulated prefix metric against, better seed reproducibility.
+
+**Unsettled:**
+- GPU: one H100 (80 GB, about 2 concurrent 150k runs) or H200 (141 GB, about 8). Decide from current prices and a throughput probe.
+- Price: "$4–5/hour, so roughly 80–100 GPU-hours" was from memory. Check Modal's pricing page.
+- Modal login: `~/.modal.toml` exists (April 2026); not verified that it works or that the credits are on that workspace.
+
+**Order of work:**
+1. User confirms the login (else `uv run --with modal modal token new`) and that the credits are on that workspace.
+2. Add `modal` as a dev dependency. Write `evals/modal_serve.py`: vLLM, prefix caching on, weights cached in a Modal Volume, API key as a Modal secret, scale to zero when idle.
+3. Add a `modal-qwen3.8-27b` backend. Let `matrix.sh` pass `--max-context` (`evals.run` has the flag, `matrix.sh` doesn't forward it).
+4. Probe before spending much: `evals/probes/ctx_probe.py` at 30k, 60k and 120k (code at the start, compare host prompt_tokens), plus a tool-calling smoke test.
+5. Measure throughput and cost on one run; report a cost estimate before any batch.
+6. Design the tasks and fix predictions and thresholds here before any run: a full context reaching 100–200k without overflow, questions that need several facts combined, and ideally messier tool output.
+7. Pilot (4 strategies, a few seeds), then report spend before a matrix.
+
+**If Modal falls through:** ask RCAC (rcac-help@purdue.edu) for a longer GenAI Studio window, find a faculty sponsor for Gilbreth or ACCESS (Anvil), or use the Gemini free tier (strong model, rate-limited, prompts may be used for training). These came from web searches on 2026-11-17; check current terms.
 
 ## Build phases
 1. **Core loop + one backend.** Canonical types, OpenAI-compatible client, agent loop, mock tools, NoOp strategy, JSONL trace. Confirm the chosen model does reliable tool calls on the backend, and work out which backend usage/timing fields show prefix reuse. Exit: an agent solves a toy task end-to-end.

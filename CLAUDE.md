@@ -32,7 +32,8 @@ report to `results/<name>_report.txt` so the numbers are committed (`results/` h
   `prefix.py` (tokenizers, `serialize_request`, simulated prefix-reuse metric), `trace.py`.
 - `evals/`: `env/` (MockWeb, FakeFS, QueueEnv: output delivered once), `tasks/` (seeded multi-phase tasks with source labels
   distractor/relevant/needed_later; v1 = dossier/chain/repo, v2 = horizon/rot/queue/exact/buried/short, one per
-  strategy weakness), `metrics.py`, `run.py`, `report.py`, `matrix.sh`.
+  strategy weakness), `metrics.py`, `run.py`, `report.py`, `matrix.sh`; `analysis/` (process analysis of saved runs),
+  `probes/` (one-off backend context probes). Run these from the repo root: `PYTHONPATH=. uv run python evals/probes/ctx_probe.py <backend> <tokens>`.
 
 ## Invariants (tests cover these; keep them)
 - Only tool-result *content* is ever rewritten, so tool_call/tool_result pairing stays valid.
@@ -80,7 +81,8 @@ Implicit scoping (no "only X counts"/"current") changed nothing: Qwen 256/256 (P
 Process analysis of those traces: no confusion signal; the decoy is never named, and Qwen spends extra output
 listing stale-value histories but resolves them correctly (PLAN.md "Process analysis of the calibration traces").
 No weaker model on GenAI Studio is usable (truncation or broken tool calls).
-Open, in rough priority: decide whether to test a weaker model (paid, or-llama3.3-70b) or contexts >65k (paid),
+Open, in rough priority: long-context (100–200k) test on self-hosted Qwen using Modal credits (proposed, not started,
+awaiting go-ahead; PLAN.md "Next: long-context test on Modal"), or a weaker model (paid, or-llama3.3-70b),
 then tasks where distraction/rot actually hurts a full context (harder decoys, longer contexts,
 weaker or second-family models such as Llama), with predictions fixed first; ablations (summary vs bare stub, ledger
 on/off, immediate vs batched apply); the cost-aware apply rule (confirm before starting).
